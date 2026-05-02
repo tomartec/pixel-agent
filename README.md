@@ -6,7 +6,7 @@ Agent Pixels is a Paperclip plugin that turns your company of AI agents into a l
 
 Learn more at [agent-pixels.com](https://agent-pixels.com).
 
-![Agent Pixels hero image](public/assets/brand/agent-pixels-hero.png)
+![Agent Pixels hero image](public/assets/brand/agent-pixels-hero.jpg)
 
 ## What It Does
 
