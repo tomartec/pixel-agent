@@ -28,6 +28,10 @@ Learn more at [agent-pixels.com](https://agent-pixels.com).![X](https://img.shie
 
 ### Release Version
 
+> Note: a published release ZIP is only available once a GitHub Release has been
+> created for this repo (see `pnpm run package:release` and the release workflow).
+> If there are no releases yet, use the [Development Version](#development-version) below.
+
 Use the release version if you just want to install Agent Pixels. The release ZIP already contains the built plugin files, so you do not need the Paperclip source code or plugin SDK locally.
 
 Prerequisites:
@@ -67,17 +71,22 @@ Prerequisites:
 
 - Node.js 20+
 - pnpm
-- Paperclip running
+- Paperclip running (the CLI talks to it on `http://127.0.0.1:3100` by default)
+- The Paperclip CLI installed globally:
+
+  ```bash
+  npm install -g paperclipai
+  ```
 
 The Paperclip plugin SDK is published on npm, so you no longer need the Paperclip
 source code to build. The SDK (`@paperclipai/plugin-sdk`) and shared types
 (`@paperclipai/shared`) are regular dependencies installed by `pnpm install`.
 
-Clone and build Agent Pixels:
+Clone and build the plugin:
 
 ```bash
-git clone https://github.com/gcampton/Agent-Pixels
-cd Agent-Pixels
+git clone https://github.com/tomartec/pixel-agent
+cd pixel-agent
 pnpm install
 pnpm run build
 ```
@@ -86,11 +95,16 @@ The build output is written to `dist/`. The build uses the official SDK bundler
 presets (`@paperclipai/plugin-sdk/bundlers`) via `esbuild.config.mjs`, plus the
 asset-index step in `scripts/asset-index.mjs`.
 
-Install the plugin into Paperclip from this local folder:
+Install the plugin into Paperclip from this local folder, then confirm it loaded:
 
 ```bash
-paperclipai plugin install /absolute/path/to/Agent-Pixels
+paperclipai plugin install /absolute/path/to/pixel-agent
+paperclipai plugin list
+paperclipai plugin inspect agent-pixels.camera
 ```
+
+The CLI auto-detects local paths and sends `isLocalPath: true`; pass `--local` to
+be explicit. Running `paperclipai plugin install .` from inside the folder works too.
 
 While installed from a local path, Paperclip watches the rebuilt `dist/` output —
 run `pnpm dev` in another terminal to rebuild on save and have the worker reload.
@@ -122,7 +136,7 @@ For self-hosted Paperclip, clone Agent Pixels into a folder that is visible insi
 Example host path:
 
 ```bash
-git clone https://github.com/gcampton/Agent-Pixels /volume4/docker/paperclip/plugins/agent-pixels
+git clone https://github.com/tomartec/pixel-agent /volume4/docker/paperclip/plugins/agent-pixels
 ```
 
 Example container path:
@@ -136,7 +150,7 @@ Agent Pixels builds against the published `@paperclipai/plugin-sdk` and
 required. Build it in place:
 
 ```bash
-cd /path/to/Agent-Pixels
+cd /path/to/pixel-agent
 pnpm install
 pnpm run build
 ```
