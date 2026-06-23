@@ -11,11 +11,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@paperclipai/plugin-sdk": ["/home/garratt/dev/4_repos/paperclip/packages/plugins/sdk/dist/index.d.ts"],
-      "@paperclipai/plugin-sdk/ui": ["/home/garratt/dev/4_repos/paperclip/packages/plugins/sdk/dist/ui/index.d.ts"]
-    }
+    "baseUrl": "."
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

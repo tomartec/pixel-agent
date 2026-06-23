@@ -65,19 +65,13 @@ Use the development version if you want to edit Agent Pixels or build it from so
 
 Prerequisites:
 
-- Node.js
+- Node.js 20+
 - pnpm
 - Paperclip running
-- Paperclip source code cloned locally
-- Built Paperclip plugin SDK
 
-If you installed Paperclip from npm and do not have the Paperclip source code locally, use the release version instead. Building from source currently requires the Paperclip repo because the plugin SDK is not published separately.
-
-To be more specific, make sure you:
-
-```bash
-git clone https://github.com/paperclipai/paperclip
-```
+The Paperclip plugin SDK is published on npm, so you no longer need the Paperclip
+source code to build. The SDK (`@paperclipai/plugin-sdk`) and shared types
+(`@paperclipai/shared`) are regular dependencies installed by `pnpm install`.
 
 Clone and build Agent Pixels:
 
@@ -88,17 +82,20 @@ pnpm install
 pnpm run build
 ```
 
-The build output is written to `dist/`.
+The build output is written to `dist/`. The build uses the official SDK bundler
+presets (`@paperclipai/plugin-sdk/bundlers`) via `esbuild.config.mjs`, plus the
+asset-index step in `scripts/asset-index.mjs`.
 
-If your Paperclip source is somewhere else, set the SDK path when building. This path should point to the built Paperclip plugin SDK:
+Install the plugin into Paperclip from this local folder:
 
 ```bash
-PAPERCLIP_SDK_DIST=/path/to/paperclip/packages/plugins/sdk/dist pnpm run build
+paperclipai plugin install /absolute/path/to/Agent-Pixels
 ```
 
-Then install the plugin in Paperclip using the local path to this repo.
+While installed from a local path, Paperclip watches the rebuilt `dist/` output —
+run `pnpm dev` in another terminal to rebuild on save and have the worker reload.
 
-To create a release ZIP after building:
+To create a release ZIP after building (alternative distribution):
 
 ```bash
 pnpm run package:release
@@ -108,10 +105,13 @@ This requires the `zip` command-line tool. The ZIP is written to `release/`.
 
 ## Development
 
-Run checks before opening a pull request:
+Common scripts:
 
 ```bash
+pnpm dev          # rebuild worker, manifest, and ui bundles on save
+pnpm dev:ui       # local UI preview server with hot-reload events (port 4177)
 pnpm run typecheck
+pnpm test
 pnpm run build
 ```
 
@@ -131,24 +131,14 @@ Example container path:
 /paperclip/plugins/agent-pixels
 ```
 
-Agent Pixels currently builds against the Paperclip plugin SDK from the Paperclip monorepo. Build `@paperclipai/shared` and `@paperclipai/plugin-sdk` from the Paperclip source first:
-
-```bash
-cd /path/to/paperclip/packages/shared
-npm install
-npx tsc --noEmitOnError false
-
-cd /path/to/paperclip/packages/plugins/sdk
-npm install
-npx tsc --noEmitOnError false
-```
-
-Then build Agent Pixels. If the plugin is not cloned under the Paperclip repo, set `PAPERCLIP_SDK_DIST`:
+Agent Pixels builds against the published `@paperclipai/plugin-sdk` and
+`@paperclipai/shared` packages from npm, so no Paperclip source checkout is
+required. Build it in place:
 
 ```bash
 cd /path/to/Agent-Pixels
-npm install
-PAPERCLIP_SDK_DIST=/path/to/paperclip/packages/plugins/sdk/dist npm run build
+pnpm install
+pnpm run build
 ```
 
 In authenticated Paperclip deployments, create a CLI auth challenge and approve it as an instance admin:
