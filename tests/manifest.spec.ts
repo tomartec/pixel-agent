@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import manifest from "../src/manifest.js";
 
+const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+
 describe("agent-pixels manifest", () => {
+  it("keeps manifest.version in sync with package.json's version", () => {
+    expect(manifest.version).toBe(packageJson.version);
+  });
+
   it("targets plugin api version 1", () => {
     expect(manifest.apiVersion).toBe(1);
   });
