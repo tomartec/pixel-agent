@@ -65,9 +65,20 @@ const styles = {
     textDecoration: "none",
     borderRadius: "6px",
     color: "var(--foreground)",
+    overflow: "hidden",
   } as React.CSSProperties,
   linkActive: {
     background: "var(--accent)",
+  } as React.CSSProperties,
+  linkIcon: {
+    flexShrink: 0,
+  } as React.CSSProperties,
+  linkLabel: {
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   } as React.CSSProperties,
   page: {
     minHeight: "100%",
@@ -145,8 +156,8 @@ export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
 
   return (
     <a href={href} aria-current={isActive ? "page" : undefined} style={{ ...styles.link, ...(isActive ? styles.linkActive : {}) }}>
-      <span aria-hidden="true">▣</span>
-      Agent Pixels
+      <span aria-hidden="true" style={styles.linkIcon}>▣</span>
+      <span style={styles.linkLabel}>Agent Pixels</span>
     </a>
   );
 }
