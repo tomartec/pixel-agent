@@ -1,6 +1,16 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
-export const PLUGIN_ID = "agent-pixels.camera";
+// Lowercase-UUID plugin id (not the dot-namespaced "agent-pixels.camera" we used
+// to ship). Paperclip's `/_plugins/:pluginId/ui/*` static route tries
+// `registry.getById` (a uuid-typed column) before falling back to
+// `registry.getByKey`; its catch only swallows Postgres' invalid-uuid-syntax
+// error when the code surfaces directly on the thrown error, but Drizzle nests
+// it under `error.cause.code`, so the catch rethrows and the route 500s for any
+// non-uuid plugin id. Using a uuid-shaped id avoids the Postgres syntax error
+// entirely, so `getById` returns null cleanly and the working `getByKey`
+// fallback runs. See https://github.com/paperclipai/paperclip — bug report
+// pending. Revert to a readable id once paperclipai/paperclip fixes the catch.
+export const PLUGIN_ID = "4d696994-e10d-4a05-a063-ca8b6e95de80";
 export const PLUGIN_VERSION = "0.1.0";
 export const PAGE_ROUTE = "agent-pixels";
 

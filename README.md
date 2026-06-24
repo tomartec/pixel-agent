@@ -1,12 +1,10 @@
-# Agent Pixels
+# Pixel Agent
 
 ![Agent Pixels logo banner](public/assets/brand/agent-pixels-logo-banner.jpg)
 
-Agent Pixels is a Paperclip plugin that turns your company of AI agents into a live pixel-art office camera.
+Pixel Agent is a [Paperclip](https://github.com/paperclipai/paperclip) plugin that turns your company of AI agents into a live pixel-art office camera. Inside Paperclip it shows up under the display name **Agent Pixels**.
 
-Learn more at [agent-pixels.com](https://agent-pixels.com).![X](https://img.shields.io/twitter/follow/gcampton)
-
-
+This repo (`tomartec/pixel-agent`) is maintained independently, built on the official Paperclip plugin SDK toolchain. It started from [gcampton/Agent-Pixels](https://github.com/gcampton/Agent-Pixels) — see [Credits](#credits) below.
 
 ![Agent Pixels hero image](public/assets/brand/agent-pixels-hero.jpg)
 
@@ -16,7 +14,6 @@ Learn more at [agent-pixels.com](https://agent-pixels.com).![X](https://img.shie
 - Moves working agents toward desks and idle agents toward lounge, kitchen, boardroom, and games areas.
 - Supports multiple camera views across the office layout.
 - Includes assignable character sprites so each agent can have a consistent look.
-- Expands the original pixel-agent style into a denser company view for larger Paperclip teams.
 
 ## Screenshots
 
@@ -32,7 +29,7 @@ Learn more at [agent-pixels.com](https://agent-pixels.com).![X](https://img.shie
 > created for this repo (see `pnpm run package:release` and the release workflow).
 > If there are no releases yet, use the [Development Version](#development-version) below.
 
-Use the release version if you just want to install Agent Pixels. The release ZIP already contains the built plugin files, so you do not need the Paperclip source code or plugin SDK locally.
+Use the release version if you just want to install the plugin. The release ZIP already contains the built plugin files, so you do not need the Paperclip source code or plugin SDK locally.
 
 Prerequisites:
 
@@ -48,7 +45,7 @@ Download the latest `agent-pixels-*.zip` from the GitHub Releases page, then unz
 After unzipping, you should have a folder like this:
 
 ```text
-agent-pixels-0.1.0/
+agent-pixels-0.2.0/
   package.json
   README.md
   dist/
@@ -60,12 +57,12 @@ agent-pixels-0.1.0/
 For Docker installs, unzip the release into a bind-mounted folder and install the path as seen from inside the container, for example:
 
 ```text
-/paperclip/plugins/agent-pixels-0.1.0
+/paperclip/plugins/agent-pixels-0.2.0
 ```
 
 ### Development Version
 
-Use the development version if you want to edit Agent Pixels or build it from source.
+Use the development version if you want to edit the plugin or build it from source.
 
 Prerequisites:
 
@@ -78,7 +75,7 @@ Prerequisites:
   npm install -g paperclipai
   ```
 
-The Paperclip plugin SDK is published on npm, so you no longer need the Paperclip
+The Paperclip plugin SDK is published on npm, so you do not need the Paperclip
 source code to build. The SDK (`@paperclipai/plugin-sdk`) and shared types
 (`@paperclipai/shared`) are regular dependencies installed by `pnpm install`.
 
@@ -100,7 +97,7 @@ Install the plugin into Paperclip from this local folder, then confirm it loaded
 ```bash
 paperclipai plugin install /absolute/path/to/pixel-agent
 paperclipai plugin list
-paperclipai plugin inspect agent-pixels.camera
+paperclipai plugin inspect 4d696994-e10d-4a05-a063-ca8b6e95de80
 ```
 
 The CLI auto-detects local paths and sends `isLocalPath: true`; pass `--local` to
@@ -117,6 +114,14 @@ pnpm run package:release
 
 This requires the `zip` command-line tool. The ZIP is written to `release/`.
 
+### npm Package
+
+The plugin is also published as [`@tomartec/pixel-agent`](https://www.npmjs.com/package/@tomartec/pixel-agent). In Paperclip's **Install Plugin** dialog, enter the npm package name directly:
+
+```text
+@tomartec/pixel-agent
+```
+
 ## Development
 
 Common scripts:
@@ -131,7 +136,7 @@ pnpm run build
 
 ### Self-Hosted Docker Install
 
-For self-hosted Paperclip, clone Agent Pixels into a folder that is visible inside the Paperclip container. The install API must receive the container path, not the host path.
+For self-hosted Paperclip, clone this repo into a folder that is visible inside the Paperclip container. The install API must receive the container path, not the host path.
 
 Example host path:
 
@@ -145,7 +150,7 @@ Example container path:
 /paperclip/plugins/agent-pixels
 ```
 
-Agent Pixels builds against the published `@paperclipai/plugin-sdk` and
+The plugin builds against the published `@paperclipai/plugin-sdk` and
 `@paperclipai/shared` packages from npm, so no Paperclip source checkout is
 required. Build it in place:
 
@@ -172,6 +177,14 @@ curl -s -X POST http://<your-paperclip-host>/api/plugins/install \
   -d '{"packageName":"/paperclip/plugins/agent-pixels","isLocalPath":true}'
 ```
 
+### Note on the plugin id
+
+The manifest `id` (`4d696994-e10d-4a05-a063-ca8b6e95de80`) is a UUID rather
+than a human-readable string. This works around a Paperclip host bug where
+`/_plugins/:pluginId/ui/*` 500s for non-UUID plugin ids whenever a plugin
+declares a UI entrypoint. A UUID-shaped id sidesteps the bug; it is not the
+recommended format and can be reverted once the upstream issue is fixed.
+
 ## Assets
 
 Character sprites live in:
@@ -184,7 +197,7 @@ Add new sprites as `char_81.png`, `char_82.png`, etc. The build script auto-dete
 
 ### Asset Dimensions
 
-Agent Pixels uses a 16px tile grid.
+The plugin uses a 16px tile grid.
 
 | Asset type | Location | Size |
 | --- | --- | --- |
@@ -216,35 +229,14 @@ Common furniture sizes currently in use:
 | Paintings/whiteboard | `16x32` or `32x32` |
 | Plants | `16x32` or `32x48` |
 
-## Ready-Made Paperclip Companies
-
-Agent Pixels is free to use. It is also designed to work nicely with ready-made Paperclip company packs that are available at [agent-pixels.com](https://agent-pixels.com).
-
-Paperclip company packs include:
-
-- SEO agency
-- Game dev agency
-- SaaS company
-- Full company
-
-More company types are being explored. Agent Pixel Company packs are built from Garratt's personal agents developed over many months. Agents come with a Task Router Engine and extensive reference files to grep. Scraped from high quality web data, these make whatever AI you use on par with pretrained AI LLMs without having to do the work. For example, the Copywriter comes with over 7 reference files to grep and 6 different task files for the right job.
-
 ## Support
 
-For feature requests, bugs, or help using Agent Pixels, please submit a ticket at [agent-pixels.com/support](https://www.agent-pixels.com/support).
-
-## What's Next
-
-Planned improvements include:
-
-- More character models and customization options.
-- More visual assets, props, and office interactions.
-- Adjustable office scale, including desks, meeting rooms, lounges, and floors.
-- Additional layouts such as co-working spaces, agency lofts, and high-rise offices.
-- Better idle behaviors and animations, including talking, pacing, and coffee runs.
+For bugs or feature requests on this fork, open an issue at [tomartec/pixel-agent/issues](https://github.com/tomartec/pixel-agent/issues).
 
 ## Contributing
 
 Pull requests are welcome for bug fixes, plugin improvements, new room assets, furniture, and character sprites.
 
-For commercial enquiries, ready-made Paperclip company packs, or larger collaboration ideas, start at [agent-pixels.com](https://agent-pixels.com).
+## Credits
+
+This plugin is based on [gcampton/Agent-Pixels](https://github.com/gcampton/Agent-Pixels) by Garratt Campton, used here as the original reference implementation. For the original branding, ready-made Paperclip company packs, and the author's own support channel, see [agent-pixels.com](https://agent-pixels.com).

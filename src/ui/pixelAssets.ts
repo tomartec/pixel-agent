@@ -3,6 +3,7 @@ import { buildDynamicCatalog } from "../office/layout/furnitureCatalog.js";
 import { setCharacterTemplates } from "../office/sprites/spriteData.js";
 import type { OfficeLayout, SpriteData, TileType } from "../office/types.js";
 import { setWallSprites } from "../office/wallTiles.js";
+import { PLUGIN_ID } from "../manifest.js";
 
 type CharacterDirectionSprites = {
   down: SpriteData[];
@@ -257,7 +258,7 @@ export function getPluginAssetBaseUrl(): string {
   const pluginMatch = window.location.pathname.match(/\/_plugins\/[^/]+\/ui\//);
   if (pluginMatch) return `${pluginMatch[0]}assets/`;
 
-  return "/_plugins/agent-pixels.camera/ui/assets/";
+  return `/_plugins/${PLUGIN_ID}/ui/assets/`;
 }
 
 function rgbaToHex(r: number, g: number, b: number, a: number): string {

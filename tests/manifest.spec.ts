@@ -6,6 +6,10 @@ describe("agent-pixels manifest", () => {
     expect(manifest.apiVersion).toBe(1);
   });
 
+  it("uses a lowercase-uuid-shaped id (works around a host bug serving non-uuid plugin ids)", () => {
+    expect(manifest.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
   it("declares the capabilities its UI slots rely on", () => {
     expect(manifest.capabilities).toContain("ui.sidebar.register");
     expect(manifest.capabilities).toContain("ui.page.register");
