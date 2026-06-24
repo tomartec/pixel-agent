@@ -11,7 +11,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 // fallback runs. See https://github.com/paperclipai/paperclip — bug report
 // pending. Revert to a readable id once paperclipai/paperclip fixes the catch.
 export const PLUGIN_ID = "4d696994-e10d-4a05-a063-ca8b6e95de80";
-export const PLUGIN_VERSION = "0.1.0";
+export const PLUGIN_VERSION = "0.3.0";
 export const PAGE_ROUTE = "agent-pixels";
 
 export const SLOT_IDS = {
