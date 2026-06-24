@@ -1,11 +1,25 @@
 {
-  "name": "@agent-pixels/paperclip-plugin",
+  "name": "@tomartec/pixel-agent",
   "version": "0.1.0",
   "description": "Security camera style pixel office plugin for Paperclip",
   "type": "module",
-  "private": true,
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomartec/pixel-agent.git"
+  },
+  "homepage": "https://github.com/tomartec/pixel-agent#readme",
+  "bugs": {
+    "url": "https://github.com/tomartec/pixel-agent/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "paperclipPlugin": {
     "manifest": "./dist/manifest.js",
@@ -25,6 +39,7 @@
     "dev": "node ./esbuild.config.mjs --watch",
     "dev:ui": "paperclip-plugin-dev-server --root . --ui-dir dist/ui --port 4177",
     "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build",
     "package:release": "node scripts/package-release.mjs",
     "test": "vitest run --config ./vitest.config.ts",
     "typecheck": "tsc --noEmit"
