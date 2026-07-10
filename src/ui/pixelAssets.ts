@@ -59,6 +59,8 @@ export type LoadedPixelAssets = {
     office: CameraBounds;
     boardroomKitchen: CameraBounds;
     overflowOffice: CameraBounds;
+    kitchen: CameraBounds;
+    total: CameraBounds;
   };
 };
 
@@ -80,7 +82,8 @@ const WALL_BITMASK_COUNT = 16;
 
 let loadPromise: Promise<LoadedPixelAssets> | null = null;
 
-function trimLayoutToVisibleRoom(layout: OfficeLayout): OfficeLayout {
+/** @internal exported for tests/debugging */
+export function trimLayoutToVisibleRoom(layout: OfficeLayout): OfficeLayout {
   const occupied: Array<{ col: number; row: number }> = [];
   for (let row = 0; row < layout.rows; row++) {
     for (let col = 0; col < layout.cols; col++) {
@@ -90,10 +93,10 @@ function trimLayoutToVisibleRoom(layout: OfficeLayout): OfficeLayout {
 
   if (occupied.length === 0) return layout;
 
-  const minCol = Math.max(0, Math.min(...occupied.map((tile) => tile.col)) - 1);
-  const maxCol = Math.min(layout.cols - 1, Math.max(...occupied.map((tile) => tile.col)) + 1);
-  const minRow = Math.max(0, Math.min(...occupied.map((tile) => tile.row)) - 1);
-  const maxRow = Math.min(layout.rows - 1, Math.max(...occupied.map((tile) => tile.row)) + 1);
+  const minCol = Math.min(...occupied.map((tile) => tile.col));
+  const maxCol = Math.max(...occupied.map((tile) => tile.col));
+  const minRow = Math.min(...occupied.map((tile) => tile.row));
+  const maxRow = Math.max(...occupied.map((tile) => tile.row));
   const cols = maxCol - minCol + 1;
   const rows = maxRow - minRow + 1;
 
@@ -121,75 +124,150 @@ function trimLayoutToVisibleRoom(layout: OfficeLayout): OfficeLayout {
   };
 }
 
-function combineLayouts(office: OfficeLayout, boardroomKitchen: OfficeLayout): {
+/** Programmatically built staff kitchen room (Camera 4). */
+function buildKitchenLayout(cols = 22, rows = 11): OfficeLayout {
+  const wallColor = { h: 26, s: 14, b: -55, c: -45 };
+  const floorColor = { h: 36, s: 24, b: 4, c: -16 };
+  const tiles: TileType[] = [];
+  const tileColors: NonNullable<OfficeLayout["tileColors"]> = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const isWall = row === 0 || row === rows - 1 || col === 0 || col === cols - 1;
+      tiles.push(isWall ? (0 as TileType) : (1 as TileType));
+      tileColors.push(isWall ? wallColor : floorColor);
+    }
+  }
+
+  const furniture: OfficeLayout["furniture"] = [
+    // Counter along the top wall
+    { uid: "kitchen-counter-1", type: "SMALL_TABLE_FRONT", col: 2, row: 1 },
+    { uid: "kitchen-counter-2", type: "SMALL_TABLE_FRONT", col: 4, row: 1 },
+    { uid: "kitchen-coffee", type: "COFFEE", col: 2, row: 2 },
+    { uid: "kitchen-pot", type: "POT", col: 5, row: 2 },
+    // Wall decorations
+    { uid: "kitchen-clock", type: "CLOCK", col: 8, row: -1 },
+    { uid: "kitchen-paint", type: "SMALL_PAINTING_2", col: 14, row: -1 },
+    { uid: "kitchen-hang-plant", type: "HANGING_PLANT", col: 17, row: -1 },
+    // Dining table with chairs
+    { uid: "kitchen-table", type: "TABLE_FRONT", col: 9, row: 4 },
+    { uid: "kitchen-chair-1", type: "WOODEN_CHAIR_SIDE", col: 8, row: 4 },
+    { uid: "kitchen-chair-2", type: "WOODEN_CHAIR_SIDE", col: 8, row: 6 },
+    { uid: "kitchen-chair-3", type: "WOODEN_CHAIR_SIDE:left", col: 12, row: 4 },
+    { uid: "kitchen-chair-4", type: "WOODEN_CHAIR_SIDE:left", col: 12, row: 6 },
+    // Break corner
+    { uid: "kitchen-bench-1", type: "CUSHIONED_BENCH", col: 16, row: 2 },
+    { uid: "kitchen-bench-2", type: "CUSHIONED_BENCH", col: 17, row: 2 },
+    { uid: "kitchen-side-table", type: "SMALL_TABLE_SIDE", col: 20, row: 4 },
+    { uid: "kitchen-cactus", type: "CACTUS", col: 20, row: 1 },
+    { uid: "kitchen-large-plant", type: "LARGE_PLANT", col: 17, row: 7 },
+    { uid: "kitchen-plant", type: "PLANT_2", col: 1, row: 1 },
+    { uid: "kitchen-bin", type: "BIN", col: 1, row: 9 },
+  ];
+
+  return { version: 1, cols, rows, tiles, tileColors, furniture };
+}
+
+/** @internal exported for tests/debugging */
+export function combineLayouts(office: OfficeLayout, boardroomKitchen: OfficeLayout): {
   layout: OfficeLayout;
   cameraBounds: LoadedPixelAssets["cameraBounds"];
 } {
-  const gap = 5;
   const overflowOffice = recolorLayout(office, { h: 145, s: 16, b: -8, c: -35 }, { h: 270, s: 18, b: -20, c: -45 });
-  const boardOffsetCol = office.cols + gap;
-  const overflowOffsetCol = boardOffsetCol + boardroomKitchen.cols + gap;
-  const cols = office.cols + gap + boardroomKitchen.cols + gap + overflowOffice.cols;
-  const rows = Math.max(office.rows, boardroomKitchen.rows);
-  const tiles = Array<TileType>(cols * rows).fill(255 as TileType);
-  const tileColors: NonNullable<OfficeLayout["tileColors"]> = Array(cols * rows).fill(null);
+  const kitchen = buildKitchenLayout();
+
+  // One unified rectangular floor:
+  //   outer wall + 1-tile walkway ring, rooms in a 2x2 grid around a
+  //   cross-shaped corridor.
+  //     office (Camera 1)         | boardroomKitchen (Camera 2)
+  //     overflowOffice (Camera 3) | kitchen (Camera 4)
+  const corridor = 3;
+  const margin = 2; // outer wall (1) + walkway ring (1)
+  const leftW = Math.max(office.cols, overflowOffice.cols);
+  const rightW = Math.max(boardroomKitchen.cols, kitchen.cols);
+  const topH = Math.max(office.rows, boardroomKitchen.rows);
+  const bottomH = Math.max(overflowOffice.rows, kitchen.rows);
+  const cols = margin + leftW + corridor + rightW + margin;
+  const rows = margin + topH + corridor + bottomH + margin;
+  const vHallCol = margin + leftW; // corridor cols: vHallCol .. vHallCol+2
+  const hHallRow = margin + topH; // corridor rows: hHallRow .. hHallRow+2
+
   const wallColor = { h: 214, s: 30, b: -100, c: -55 };
-  const hallColor = { h: 209, s: 0, b: -16, c: -8 };
+  // Muted dark corridor: low brightness + strongly reduced contrast so the
+  // checker pattern stays subtle and characters/names remain readable on it.
+  const hallColor = { h: 215, s: 8, b: -44, c: -52 };
   const hallFloor = 9 as TileType;
-  const boardOffsetRow = Math.max(0, Math.floor((office.rows - boardroomKitchen.rows) / 2));
+
+  // Base: fill the whole rectangle with corridor floor, walled perimeter.
+  const tiles = Array<TileType>(cols * rows).fill(hallFloor);
+  const tileColors: NonNullable<OfficeLayout["tileColors"]> = Array(cols * rows).fill(hallColor);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (row === 0 || row === rows - 1 || col === 0 || col === cols - 1) {
+        const index = row * cols + col;
+        tiles[index] = 0 as TileType;
+        tileColors[index] = wallColor;
+      }
+    }
+  }
 
   function copyLayout(source: OfficeLayout, offsetCol: number, offsetRow: number) {
     for (let row = 0; row < source.rows; row++) {
       for (let col = 0; col < source.cols; col++) {
-        const sourceIndex = row * source.cols + col;
+        const tile = source.tiles[row * source.cols + col];
+        if (tile === 255) continue; // keep corridor floor under void tiles
         const targetIndex = (row + offsetRow) * cols + col + offsetCol;
-        tiles[targetIndex] = source.tiles[sourceIndex];
-        tileColors[targetIndex] = source.tileColors?.[sourceIndex] ?? null;
+        tiles[targetIndex] = tile;
+        tileColors[targetIndex] = source.tileColors?.[row * source.cols + col] ?? null;
       }
     }
   }
 
-  copyLayout(office, 0, 0);
-  copyLayout(boardroomKitchen, boardOffsetCol, boardOffsetRow);
-  copyLayout(overflowOffice, overflowOffsetCol, 0);
+  // Rooms hug the central corridor (bottom-align top row, top-align bottom row).
+  const officeAt = { col: margin, row: margin + topH - office.rows };
+  const boardAt = { col: vHallCol + corridor + (rightW - boardroomKitchen.cols), row: margin + topH - boardroomKitchen.rows };
+  const overflowAt = { col: margin, row: hHallRow + corridor };
+  const kitchenAt = { col: vHallCol + corridor, row: hHallRow + corridor };
 
-  const hallRow = Math.floor(rows / 2);
-  const spawnTile = { col: office.cols - 1, row: hallRow };
-  function drawHall(startCol: number, endCol: number) {
-    for (let row = hallRow - 1; row <= hallRow + 1; row++) {
-      for (let col = startCol; col <= endCol; col++) {
-        const index = row * cols + col;
-        tiles[index] = hallFloor;
-        tileColors[index] = hallColor;
-      }
-    }
+  copyLayout(office, officeAt.col, officeAt.row);
+  copyLayout(boardroomKitchen, boardAt.col, boardAt.row);
+  copyLayout(overflowOffice, overflowAt.col, overflowAt.row);
+  copyLayout(kitchen, kitchenAt.col, kitchenAt.row);
 
-    for (let row = hallRow - 2; row <= hallRow + 2; row++) {
-      for (const col of [startCol + 1, startCol + 2, endCol - 1, endCol]) {
-        const index = row * cols + col;
-        tiles[index] = hallFloor;
-        tileColors[index] = hallColor;
-      }
+  // Punch doorways: replace wall tiles with corridor floor (3 tiles wide).
+  function punchDoor(centerCol: number, centerRow: number, horizontal: boolean) {
+    for (let i = -1; i <= 1; i++) {
+      const col = horizontal ? centerCol + i : centerCol;
+      const row = horizontal ? centerRow : centerRow + i;
+      const index = row * cols + col;
+      tiles[index] = hallFloor;
+      tileColors[index] = hallColor;
     }
   }
 
-  drawHall(office.cols - 2, boardOffsetCol + 1);
-  drawHall(boardOffsetCol + boardroomKitchen.cols - 2, overflowOffsetCol + 1);
+  // office: right wall -> vertical corridor, bottom wall -> horizontal corridor
+  punchDoor(officeAt.col + office.cols - 1, officeAt.row + Math.floor(office.rows / 2), false);
+  punchDoor(officeAt.col + Math.floor(office.cols / 2), officeAt.row + office.rows - 1, true);
+  // boardroomKitchen: left wall + two bottom doors (boardroom and game room halves)
+  punchDoor(boardAt.col, boardAt.row + Math.floor(boardroomKitchen.rows / 2), false);
+  punchDoor(boardAt.col + Math.floor(boardroomKitchen.cols / 4), boardAt.row + boardroomKitchen.rows - 1, true);
+  punchDoor(boardAt.col + Math.floor((3 * boardroomKitchen.cols) / 4), boardAt.row + boardroomKitchen.rows - 1, true);
+  // overflowOffice: top wall + right wall
+  punchDoor(overflowAt.col + Math.floor(overflowOffice.cols / 2), overflowAt.row, true);
+  punchDoor(overflowAt.col + overflowOffice.cols - 1, overflowAt.row + Math.floor(overflowOffice.rows / 2), false);
+  // kitchen: top wall + left wall
+  punchDoor(kitchenAt.col + Math.floor(kitchen.cols / 2), kitchenAt.row, true);
+  punchDoor(kitchenAt.col, kitchenAt.row + Math.floor(kitchen.rows / 2), false);
+
+  const spawnTile = { col: vHallCol + 1, row: hHallRow + 1 };
   tileColors[spawnTile.row * cols + spawnTile.col] = { h: 204, s: 10, b: -42, c: -32 };
 
-  for (let row = hallRow - 2; row <= hallRow + 2; row++) {
-    for (const col of [
-      office.cols - 3,
-      boardOffsetCol + 2,
-      boardOffsetCol + boardroomKitchen.cols - 3,
-      overflowOffsetCol + 2,
-    ]) {
-      const index = row * cols + col;
-      if (tiles[index] === 255) {
-        tiles[index] = 0;
-        tileColors[index] = wallColor;
-      }
-    }
+  function shiftFurniture(source: OfficeLayout, prefix: string, offset: { col: number; row: number }) {
+    return source.furniture.map((item) => ({
+      ...item,
+      uid: `${prefix}-${item.uid}`,
+      col: item.col + offset.col,
+      row: item.row + offset.row,
+    }));
   }
 
   return {
@@ -202,29 +280,18 @@ function combineLayouts(office: OfficeLayout, boardroomKitchen: OfficeLayout): {
       tileColors,
       spawnTile,
       furniture: [
-        ...office.furniture.map((item) => ({ ...item, uid: `camera1-${item.uid}` })),
-        ...boardroomKitchen.furniture.map((item) => ({
-          ...item,
-          uid: `camera2-${item.uid}`,
-          col: item.col + boardOffsetCol,
-          row: item.row + boardOffsetRow,
-        })),
-        ...overflowOffice.furniture.map((item) => ({
-          ...item,
-          uid: `camera3-${item.uid}`,
-          col: item.col + overflowOffsetCol,
-        })),
+        ...shiftFurniture(office, "camera1", officeAt),
+        ...shiftFurniture(boardroomKitchen, "camera2", boardAt),
+        ...shiftFurniture(overflowOffice, "camera3", overflowAt),
+        ...shiftFurniture(kitchen, "camera4", kitchenAt),
       ],
     },
     cameraBounds: {
-      office: { col: 0, row: 0, cols: office.cols, rows: office.rows },
-      boardroomKitchen: {
-        col: boardOffsetCol,
-        row: boardOffsetRow - 1,
-        cols: boardroomKitchen.cols,
-        rows: boardroomKitchen.rows + 1,
-      },
-      overflowOffice: { col: overflowOffsetCol, row: 0, cols: overflowOffice.cols, rows: overflowOffice.rows },
+      office: { col: 0, row: 0, cols: vHallCol + 2, rows: hHallRow + 2 },
+      boardroomKitchen: { col: vHallCol - 1, row: 0, cols: cols - vHallCol + 1, rows: hHallRow + 2 },
+      overflowOffice: { col: 0, row: hHallRow - 1, cols: vHallCol + 2, rows: rows - hHallRow + 1 },
+      kitchen: { col: vHallCol - 1, row: hHallRow - 1, cols: cols - vHallCol + 1, rows: rows - hHallRow + 1 },
+      total: { col: 0, row: 0, cols, rows },
     },
   };
 }

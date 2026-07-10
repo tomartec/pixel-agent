@@ -66,6 +66,12 @@ export interface FurnitureInstance {
   zY: number;
   /** Render-time horizontal flip flag (for mirrored side variants) */
   mirrored?: boolean;
+  /**
+   * Top-down sprite that lies on the floor plane (tables, chairs, plants...).
+   * The isometric renderer projects these with the floor instead of
+   * billboarding them upright. Wall-mounted items stay upright.
+   */
+  flat?: boolean;
 }
 
 export interface ToolActivity {

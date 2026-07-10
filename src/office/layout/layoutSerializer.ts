@@ -94,7 +94,11 @@ export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): Furnit
       }
     }
 
-    instances.push({ sprite, x, y, zY, ...(mirrored ? { mirrored: true } : {}) });
+    // All furniture art is top-down; everything except wall-mounted items
+    // lies on the floor plane in the isometric view.
+    const flat = entry.category !== 'wall' && !entry.canPlaceOnWalls;
+
+    instances.push({ sprite, x, y, zY, ...(mirrored ? { mirrored: true } : {}), ...(flat ? { flat: true } : {}) });
   }
   return instances;
 }

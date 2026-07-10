@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TILE_SIZE } from "../office/types.js";
 import { OfficeState } from "../office/engine/officeState.js";
 import { startGameLoop } from "../office/engine/gameLoop.js";
+import { renderIsoFrame } from "../office/engine/isoRenderer.js";
 import { renderFrame } from "../office/engine/renderer.js";
 import { type CameraBounds, loadPixelAssets } from "./pixelAssets.js";
 
@@ -13,9 +14,11 @@ export type CameraAgent = {
   characterIndex?: number;
 };
 
+export type CameraView = "office" | "boardroomKitchen" | "overflowOffice" | "kitchen" | "total" | "map";
+
 type PixelOfficeCanvasProps = {
   agents: CameraAgent[];
-  camera: "office" | "boardroomKitchen" | "overflowOffice";
+  camera: CameraView;
 };
 
 function stableNumericId(id: string): number {
@@ -30,7 +33,7 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const officeRef = useRef<OfficeState | null>(null);
-  const cameraBoundsRef = useRef<Record<"office" | "boardroomKitchen" | "overflowOffice", CameraBounds> | null>(null);
+  const cameraBoundsRef = useRef<Record<Exclude<CameraView, "map">, CameraBounds> | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const agentMeta = useMemo(
@@ -110,13 +113,47 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
       update: (dt) => office.update(dt),
       render: (ctx) => {
         const layout = office.getLayout();
+
+        if (camera === "map") {
+          const { project, zoom: isoZoom } = renderIsoFrame(
+            ctx,
+            canvas.width,
+            canvas.height,
+            office.tileMap,
+            office.furniture,
+            Array.from(office.characters.values()),
+            layout.tileColors,
+            layout.cols,
+            layout.rows,
+          );
+
+          ctx.save();
+          ctx.font = `${Math.max(11, Math.floor(6 * isoZoom))}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.fillStyle = "#f9fafb";
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = Math.max(2, isoZoom);
+          for (const character of office.characters.values()) {
+            const name = agentMeta.get(character.id)?.name;
+            if (!name) continue;
+            const p = project(character.x, character.y + 8);
+            ctx.strokeText(name, p.x, p.y);
+            ctx.fillText(name, p.x, p.y);
+          }
+          ctx.restore();
+          return;
+        }
+
         const focus = cameraBounds[camera];
         const dpr = window.devicePixelRatio || 1;
         const fitZoom = Math.min(
           canvas.width / (focus.cols * TILE_SIZE),
           canvas.height / (focus.rows * TILE_SIZE),
         ) * 0.92;
-        const zoom = Math.max(dpr, fitZoom);
+        // Room cameras never zoom below device pixel ratio for sharpness;
+        // the "total" overview must always fit the whole floor instead.
+        const zoom = camera === "total" ? fitZoom : Math.max(dpr, fitZoom);
         const mapCenterCol = layout.cols / 2;
         const mapCenterRow = layout.rows / 2;
         const focusCenterCol = focus.col + focus.cols / 2;

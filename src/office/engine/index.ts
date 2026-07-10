@@ -7,6 +7,8 @@ export {
 export type { GameLoopCallbacks } from './gameLoop.js';
 export { startGameLoop } from './gameLoop.js';
 export { OfficeState } from './officeState.js';
+export type { IsoProjection } from './isoRenderer.js';
+export { renderIsoFrame } from './isoRenderer.js';
 export type { DeleteButtonBounds, EditorRenderState, SelectionRenderState } from './renderer.js';
 export {
   renderDeleteButton,

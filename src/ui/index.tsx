@@ -25,7 +25,47 @@ type CharacterSettingsData = {
   }>;
 };
 
-type CameraId = "office" | "boardroomKitchen" | "overflowOffice";
+type CameraId = "office" | "boardroomKitchen" | "overflowOffice" | "kitchen" | "total";
+
+type NavDirection = "up" | "down" | "left" | "right";
+
+const CAMERA_ORDER: CameraId[] = ["office", "boardroomKitchen", "overflowOffice", "kitchen"];
+
+const ROOM_LABELS: Record<CameraId, string> = {
+  office: "Office + Lounge",
+  boardroomKitchen: "Boardroom + Game Room",
+  overflowOffice: "Overflow Office + Lounge",
+  kitchen: "Staff Kitchen",
+  total: "Total · All Rooms",
+};
+
+/**
+ * Room adjacency matching the unified floor grid:
+ *   office            | boardroomKitchen
+ *   overflowOffice    | kitchen
+ * The flat "total" overview camera is not part of the arrow-navigation grid.
+ */
+const ROOM_NAV: Record<CameraId, Partial<Record<NavDirection, CameraId>>> = {
+  office: { right: "boardroomKitchen", down: "overflowOffice" },
+  boardroomKitchen: { left: "office", down: "kitchen" },
+  overflowOffice: { up: "office", right: "kitchen" },
+  kitchen: { left: "overflowOffice", up: "boardroomKitchen" },
+  total: {},
+};
+
+const ARROW_GLYPHS: Record<NavDirection, string> = {
+  up: "▲",
+  down: "▼",
+  left: "◀",
+  right: "▶",
+};
+
+const ARROW_KEY_TO_DIRECTION: Record<string, NavDirection> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
 
 function cameraPagePath(companyPrefix: string | null): string {
   return companyPrefix ? `/${companyPrefix}/${PAGE_ROUTE}` : `/${PAGE_ROUTE}`;
@@ -117,6 +157,22 @@ const styles = {
     background: "rgba(255,255,255,0.16)",
     color: "#fff",
   } as React.CSSProperties,
+  navArrow: {
+    position: "absolute",
+    zIndex: 2,
+    width: "38px",
+    height: "38px",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid rgba(255,255,255,0.28)",
+    borderRadius: "50%",
+    background: "rgba(17,24,39,0.72)",
+    color: "#f9fafb",
+    fontSize: "14px",
+    lineHeight: 1,
+    cursor: "pointer",
+    userSelect: "none",
+  } as React.CSSProperties,
   camera: {
     position: "relative",
     overflow: "hidden",
@@ -172,11 +228,29 @@ export function AgentPixelsCameraPage() {
     [assignments, data?.agents],
   );
   const [camera, setCamera] = useState<CameraId>("office");
-  const [view, setView] = useState<"camera" | "characters">("camera");
+  const [view, setView] = useState<"camera" | "map" | "characters">("camera");
 
   useEffect(() => {
     setAssignments(readStoredAssignments(companyId ?? null));
   }, [companyId]);
+
+  useEffect(() => {
+    if (view !== "camera") return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      const direction = ARROW_KEY_TO_DIRECTION[event.key];
+      if (!direction) return;
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      const nextCamera = ROOM_NAV[camera][direction];
+      if (!nextCamera) return;
+      event.preventDefault();
+      setCamera(nextCamera);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [view, camera]);
 
   useEffect(() => {
     const hostSlot = pageRef.current?.parentElement;
@@ -200,43 +274,41 @@ export function AgentPixelsCameraPage() {
         <div>
           <div style={styles.title}>Agent Pixels</div>
           <div style={{ fontSize: "12px", opacity: 0.7 }}>
-            {camera === "office"
-              ? "Office + Lounge"
-              : camera === "boardroomKitchen"
-                ? "Boardroom + Staff Kitchen"
-                : "Overflow Office + Lounge"} Camera
+            {view === "map" ? "3D Map · All Rooms" : view === "characters" ? "Character Assignments" : `${ROOM_LABELS[camera]} Camera`}
           </div>
         </div>
         <div style={styles.cameraTabs}>
+          {CAMERA_ORDER.map((cameraId, index) => (
+            <button
+              key={cameraId}
+              type="button"
+              title={ROOM_LABELS[cameraId]}
+              onClick={() => {
+                setView("camera");
+                setCamera(cameraId);
+              }}
+              style={{ ...styles.cameraTab, ...(view === "camera" && camera === cameraId ? styles.cameraTabActive : {}) }}
+            >
+              Camera {index + 1}
+            </button>
+          ))}
           <button
             type="button"
+            title={ROOM_LABELS.total}
             onClick={() => {
               setView("camera");
-              setCamera("office");
+              setCamera("total");
             }}
-            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "office" ? styles.cameraTabActive : {}) }}
+            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "total" ? styles.cameraTabActive : {}) }}
           >
-            Camera 1
+            Total
           </button>
           <button
             type="button"
-            onClick={() => {
-              setView("camera");
-              setCamera("boardroomKitchen");
-            }}
-            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "boardroomKitchen" ? styles.cameraTabActive : {}) }}
+            onClick={() => setView("map")}
+            style={{ ...styles.cameraTab, ...(view === "map" ? styles.cameraTabActive : {}) }}
           >
-            Camera 2
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setView("camera");
-              setCamera("overflowOffice");
-            }}
-            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "overflowOffice" ? styles.cameraTabActive : {}) }}
-          >
-            Camera 3
+            3D Map
           </button>
           <button
             type="button"
@@ -253,11 +325,53 @@ export function AgentPixelsCameraPage() {
         <CharacterAssignmentsPanel companyId={companyId ?? null} assignments={assignments} onAssignmentsChange={setAssignments} />
       ) : (
         <section aria-label="Agent Pixels office camera" style={styles.camera}>
-          <PixelOfficeCanvas camera={camera} agents={agents.length ? agents : [{ id: "placeholder", name: "No agents yet", status: "waiting", activityKind: "idle" }]} />
+          <PixelOfficeCanvas
+            camera={view === "map" ? "map" : camera}
+            agents={agents.length ? agents : [{ id: "placeholder", name: "No agents yet", status: "waiting", activityKind: "idle" }]}
+          />
           <div style={styles.scanlines} />
+          {view === "camera" && (
+            <RoomNavArrows
+              camera={camera}
+              onNavigate={(next) => {
+                setCamera(next);
+              }}
+            />
+          )}
         </section>
       )}
     </main>
+  );
+}
+
+const ARROW_POSITIONS: Record<NavDirection, React.CSSProperties> = {
+  up: { top: 10, left: "50%", transform: "translateX(-50%)" },
+  down: { bottom: 10, left: "50%", transform: "translateX(-50%)" },
+  left: { left: 10, top: "50%", transform: "translateY(-50%)" },
+  right: { right: 10, top: "50%", transform: "translateY(-50%)" },
+};
+
+function RoomNavArrows({ camera, onNavigate }: { camera: CameraId; onNavigate: (next: CameraId) => void }) {
+  const nav = ROOM_NAV[camera];
+  return (
+    <>
+      {(Object.keys(nav) as NavDirection[]).map((direction) => {
+        const target = nav[direction];
+        if (!target) return null;
+        return (
+          <button
+            key={direction}
+            type="button"
+            title={ROOM_LABELS[target]}
+            aria-label={`Go ${direction} to ${ROOM_LABELS[target]}`}
+            onClick={() => onNavigate(target)}
+            style={{ ...styles.navArrow, ...ARROW_POSITIONS[direction] }}
+          >
+            {ARROW_GLYPHS[direction]}
+          </button>
+        );
+      })}
+    </>
   );
 }
 

@@ -10,9 +10,12 @@ This repo (`tomartec/pixel-agent`) is maintained independently, built on the off
 
 ## What It Does
 
-- Shows Paperclip agents walking around a multi-room pixel office.
+- Shows Paperclip agents walking around a single unified office floor — one rectangular map divided into rooms (office + lounge, boardroom + game room, overflow office, staff kitchen) connected by corridors.
 - Moves working agents toward desks and idle agents toward lounge, kitchen, boardroom, and games areas.
-- Supports multiple camera views across the office layout.
+- Camera views:
+  - **Camera 1–4** — per-room flat views, switchable with on-screen 4-way arrow buttons or the keyboard arrow keys (rooms are laid out on a 2×2 grid).
+  - **Total** — flat top-down view of the entire floor.
+  - **3D Map** — isometric view of the whole office: the floor plane is projected at 45°, walls and characters stand upright, furniture lies on the floor.
 - Includes assignable character sprites so each agent can have a consistent look.
 
 ## Screenshots
@@ -45,7 +48,7 @@ Download the latest `agent-pixels-*.zip` from the GitHub Releases page, then unz
 After unzipping, you should have a folder like this:
 
 ```text
-agent-pixels-2026.624.0/
+agent-pixels-2026.710.0/
   package.json
   README.md
   dist/
@@ -57,7 +60,7 @@ agent-pixels-2026.624.0/
 For Docker installs, unzip the release into a bind-mounted folder and install the path as seen from inside the container, for example:
 
 ```text
-/paperclip/plugins/agent-pixels-2026.624.0
+/paperclip/plugins/agent-pixels-2026.710.0
 ```
 
 ### Development Version
@@ -209,7 +212,7 @@ The plugin uses a 16px tile grid.
 | Furniture sprites | `public/assets/furniture/**` | Multiples of `16px` |
 | Office layout | `public/assets/default-layout-1.json` | `21x22` tiles (`336x352px`) |
 | Boardroom/kitchen layout | `public/assets/agent-pixels-layout-boardroom-kitchen.json` | `22x15` tiles (`352x240px`) |
-| Combined camera map | generated in the UI | `68x22` tiles (`1088x352px`) |
+| Combined unified floor | generated in the UI (rooms on a 2×2 grid + corridors) | `49x32` tiles (`784x512px`) |
 
 Character sheets use three direction rows: front, back, and side. The opposite side direction is mirrored by the renderer.
 
