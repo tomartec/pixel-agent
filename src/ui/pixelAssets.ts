@@ -168,10 +168,54 @@ function buildKitchenLayout(cols = 22, rows = 11): OfficeLayout {
 }
 
 /** @internal exported for tests/debugging */
-export function combineLayouts(office: OfficeLayout, boardroomKitchen: OfficeLayout): {
+export /**
+ * Replace leftover checker "entry" tiles (tile 9) inside a room with the
+ * nearest regular floor tile + color, so room interiors stay uniform and
+ * only the shared corridors use the checker pattern.
+ */
+function normalizeCheckerFloors(layout: OfficeLayout, checker: TileType = 9 as TileType): OfficeLayout {
+  const tiles = [...layout.tiles];
+  const tileColors = layout.tileColors ? [...layout.tileColors] : undefined;
+  const index = (col: number, row: number) => row * layout.cols + col;
+
+  for (let row = 0; row < layout.rows; row++) {
+    for (let col = 0; col < layout.cols; col++) {
+      if (layout.tiles[index(col, row)] !== checker) continue;
+      // BFS outward for the nearest regular floor tile
+      const queue = [{ col, row }];
+      const seen = new Set([`${col},${row}`]);
+      search: while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nc = current.col + dc;
+          const nr = current.row + dr;
+          if (nc < 0 || nr < 0 || nc >= layout.cols || nr >= layout.rows) continue;
+          const key = `${nc},${nr}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const tile = layout.tiles[index(nc, nr)];
+          if (tile !== 0 && tile !== 255 && tile !== checker) {
+            tiles[index(col, row)] = tile;
+            if (tileColors) tileColors[index(col, row)] = layout.tileColors?.[index(nc, nr)] ?? null;
+            break search;
+          }
+          queue.push({ col: nc, row: nr });
+        }
+      }
+    }
+  }
+
+  return { ...layout, tiles, tileColors };
+}
+
+function combineLayouts(officeSource: OfficeLayout, boardroomKitchenSource: OfficeLayout): {
   layout: OfficeLayout;
   cameraBounds: LoadedPixelAssets["cameraBounds"];
 } {
+  const office = normalizeCheckerFloors(officeSource);
+  // The boardroom layout uses tile 8 as a bright "door mat" between its two
+  // rooms — normalize it to the neighboring room floor as well.
+  const boardroomKitchen = normalizeCheckerFloors(boardroomKitchenSource, 8 as TileType);
   const overflowOffice = recolorLayout(office, { h: 145, s: 16, b: -8, c: -35 }, { h: 270, s: 18, b: -20, c: -45 });
   const kitchen = buildKitchenLayout();
 
