@@ -45,6 +45,24 @@ export type IsoProjection = {
 type FloorCacheEntry = { scale: number; canvas: HTMLCanvasElement };
 const floorCache = new WeakMap<TileTypeVal[][], FloorCacheEntry>();
 
+/** Darkened sprite variants used for the extruded "sides" of lifted furniture */
+const darkenedCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+function getDarkenedCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+  const cached = darkenedCache.get(source);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const dctx = canvas.getContext('2d')!;
+  dctx.drawImage(source, 0, 0);
+  dctx.globalCompositeOperation = 'source-atop';
+  dctx.fillStyle = 'rgba(10, 14, 28, 0.45)';
+  dctx.fillRect(0, 0, canvas.width, canvas.height);
+  darkenedCache.set(source, canvas);
+  return canvas;
+}
+
 function getFloorCanvas(
   tileMap: TileTypeVal[][],
   tileColors: Array<ColorValue | null> | undefined,
@@ -115,19 +133,32 @@ export function renderIsoFrame(
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(floorCanvas, 0, 0);
 
-  // ── Flat furniture (top-down art lying on the floor plane) ───
+  // ── Flat furniture (top-down art extruded off the floor plane) ───
+  // Within the floor transform, translating drawing coords by (-u, -u) moves
+  // the sprite straight up on screen by u·k px, so stacking darkened copies
+  // from the base to a lifted top fakes a solid extrusion with height.
+  const liftPerPx = floorScale / ISO;
   const flatItems = furniture.filter((f) => f.flat).sort((a, b) => a.zY - b.zY);
   for (const f of flatItems) {
     const cached = getCachedSprite(f.sprite, floorScale);
-    if (f.mirrored) {
-      ctx.save();
-      ctx.translate((f.x + (f.sprite[0]?.length ?? 0)) * floorScale, f.y * floorScale);
-      ctx.scale(-1, 1);
-      ctx.drawImage(cached, 0, 0);
-      ctx.restore();
-    } else {
-      ctx.drawImage(cached, f.x * floorScale, f.y * floorScale);
+    const height = f.heightPx ?? 0;
+    const drawAt = (img: HTMLCanvasElement, lift: number) => {
+      const off = lift * liftPerPx;
+      if (f.mirrored) {
+        ctx.save();
+        ctx.translate((f.x + (f.sprite[0]?.length ?? 0)) * floorScale - off, f.y * floorScale - off);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, f.x * floorScale - off, f.y * floorScale - off);
+      }
+    };
+    if (height > 0) {
+      const dark = getDarkenedCanvas(cached);
+      for (let lift = 0; lift < height; lift++) drawAt(dark, lift);
     }
+    drawAt(cached, height);
   }
   ctx.restore();
   ctx.imageSmoothingEnabled = false;

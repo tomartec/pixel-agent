@@ -98,7 +98,26 @@ export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): Furnit
     // lies on the floor plane in the isometric view.
     const flat = entry.category !== 'wall' && !entry.canPlaceOnWalls;
 
-    instances.push({ sprite, x, y, zY, ...(mirrored ? { mirrored: true } : {}), ...(flat ? { flat: true } : {}) });
+    // Extrusion height for the isometric view (floor px). Surface items sit
+    // above desk height; seats stay low so seated characters still line up.
+    let heightPx = 0;
+    if (flat) {
+      if (entry.canPlaceOnSurfaces) heightPx = 11;
+      else if (entry.isDesk) heightPx = 9;
+      else if (entry.category === 'chairs') heightPx = 4;
+      else if (entry.category === 'decor') heightPx = 6;
+      else heightPx = 5;
+    }
+
+    instances.push({
+      sprite,
+      x,
+      y,
+      zY,
+      ...(mirrored ? { mirrored: true } : {}),
+      ...(flat ? { flat: true } : {}),
+      ...(heightPx > 0 ? { heightPx } : {}),
+    });
   }
   return instances;
 }

@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHostContext, usePluginData, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
 import { PAGE_ROUTE } from "../manifest.js";
-import { PixelOfficeCanvas } from "./PixelOfficeCanvas.js";
+import {
+  buildOfficeMap,
+  getIndustry,
+  getMapDef,
+  getTheme,
+  INDUSTRY_TEMPLATES,
+  MAP_DEFS,
+  MAP_THEMES,
+} from "../office/maps/index.js";
+import { PixelOfficeCanvas, type RoomLabel } from "./PixelOfficeCanvas.js";
 import { getPluginAssetBaseUrl, type AssetIndex } from "./pixelAssets.js";
 
 type CameraRoomData = {
@@ -25,13 +34,13 @@ type CharacterSettingsData = {
   }>;
 };
 
-type CameraId = "office" | "boardroomKitchen" | "overflowOffice" | "kitchen" | "total";
-
 type NavDirection = "up" | "down" | "left" | "right";
 
-const CAMERA_ORDER: CameraId[] = ["office", "boardroomKitchen", "overflowOffice", "kitchen"];
+const CLASSIC_MAP_ID = "classic";
 
-const ROOM_LABELS: Record<CameraId, string> = {
+const CLASSIC_CAMERA_ORDER = ["office", "boardroomKitchen", "overflowOffice", "kitchen"];
+
+const CLASSIC_ROOM_LABELS: Record<string, string> = {
   office: "Office + Lounge",
   boardroomKitchen: "Boardroom + Game Room",
   overflowOffice: "Overflow Office + Lounge",
@@ -40,18 +49,59 @@ const ROOM_LABELS: Record<CameraId, string> = {
 };
 
 /**
- * Room adjacency matching the unified floor grid:
- *   office            | boardroomKitchen
- *   overflowOffice    | kitchen
- * The flat "total" overview camera is not part of the arrow-navigation grid.
+ * Camera adjacency for the 2×2 grid (both the classic layout and preset maps
+ * use four quadrant cameras). The flat "total" overview camera is not part of
+ * the arrow-navigation grid.
  */
-const ROOM_NAV: Record<CameraId, Partial<Record<NavDirection, CameraId>>> = {
+const CLASSIC_NAV: Record<string, Partial<Record<NavDirection, string>>> = {
   office: { right: "boardroomKitchen", down: "overflowOffice" },
   boardroomKitchen: { left: "office", down: "kitchen" },
   overflowOffice: { up: "office", right: "kitchen" },
   kitchen: { left: "overflowOffice", up: "boardroomKitchen" },
   total: {},
 };
+
+const PRESET_NAV: Record<string, Partial<Record<NavDirection, string>>> = {
+  cam1: { right: "cam2", down: "cam3" },
+  cam2: { left: "cam1", down: "cam4" },
+  cam3: { up: "cam1", right: "cam4" },
+  cam4: { left: "cam3", up: "cam2" },
+  total: {},
+};
+
+type OfficeSettings = {
+  mapId: string;
+  themeId: string;
+  industryId: string;
+};
+
+const DEFAULT_OFFICE_SETTINGS: OfficeSettings = {
+  mapId: CLASSIC_MAP_ID,
+  themeId: "classic",
+  industryId: "software",
+};
+
+function officeSettingsKey(companyId: string | null): string {
+  return `agent-pixels.office-settings.${companyId ?? "instance"}`;
+}
+
+function readOfficeSettings(companyId: string | null): OfficeSettings {
+  if (typeof window === "undefined") return DEFAULT_OFFICE_SETTINGS;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(officeSettingsKey(companyId)) ?? "{}");
+    return {
+      mapId: typeof parsed.mapId === "string" ? parsed.mapId : DEFAULT_OFFICE_SETTINGS.mapId,
+      themeId: typeof parsed.themeId === "string" ? parsed.themeId : DEFAULT_OFFICE_SETTINGS.themeId,
+      industryId: typeof parsed.industryId === "string" ? parsed.industryId : DEFAULT_OFFICE_SETTINGS.industryId,
+    };
+  } catch {
+    return DEFAULT_OFFICE_SETTINGS;
+  }
+}
+
+function writeOfficeSettings(companyId: string | null, settings: OfficeSettings) {
+  window.localStorage.setItem(officeSettingsKey(companyId), JSON.stringify(settings));
+}
 
 const ARROW_GLYPHS: Record<NavDirection, string> = {
   up: "▲",
@@ -157,6 +207,17 @@ const styles = {
     background: "rgba(255,255,255,0.16)",
     color: "#fff",
   } as React.CSSProperties,
+  select: {
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "#1f2937",
+    color: "#e5e7eb",
+    padding: "4px 6px",
+    borderRadius: "4px",
+    cursor: "pointer",
+    font: "inherit",
+    fontSize: "12px",
+    maxWidth: "150px",
+  } as React.CSSProperties,
   navArrow: {
     position: "absolute",
     zIndex: 2,
@@ -227,11 +288,49 @@ export function AgentPixelsCameraPage() {
     () => (data?.agents ?? []).map((agent) => ({ ...agent, characterIndex: assignments[agent.id] })),
     [assignments, data?.agents],
   );
-  const [camera, setCamera] = useState<CameraId>("office");
+  const [settings, setSettings] = useState<OfficeSettings>(() => readOfficeSettings(companyId ?? null));
+  const isClassic = settings.mapId === CLASSIC_MAP_ID || !getMapDef(settings.mapId);
+  const [camera, setCamera] = useState<string>("total");
   const [view, setView] = useState<"camera" | "map" | "characters">("camera");
+
+  const builtMap = useMemo(() => {
+    if (isClassic) return null;
+    return buildOfficeMap(getMapDef(settings.mapId)!, getTheme(settings.themeId));
+  }, [isClassic, settings.mapId, settings.themeId]);
+
+  const roomLabels = useMemo<RoomLabel[] | undefined>(() => {
+    if (!builtMap) return undefined;
+    const industry = getIndustry(settings.industryId);
+    return builtMap.rooms
+      .filter((room) => room.role !== "corridor")
+      .map((room) => ({
+        label: industry.roleLabels[room.role] ?? room.label,
+        rect: room.rect,
+        open: room.open,
+      }));
+  }, [builtMap, settings.industryId]);
+
+  const cameraOrder = isClassic ? CLASSIC_CAMERA_ORDER : ["cam1", "cam2", "cam3", "cam4"];
+  const nav = isClassic ? CLASSIC_NAV : PRESET_NAV;
+  const cameraLabel = (cameraId: string): string => {
+    if (isClassic) return CLASSIC_ROOM_LABELS[cameraId] ?? cameraId;
+    return builtMap?.cameras.find((entry) => entry.id === cameraId)?.label ?? cameraId;
+  };
+
+  function updateSettings(patch: Partial<OfficeSettings>) {
+    setSettings((previous) => {
+      const next = { ...previous, ...patch };
+      writeOfficeSettings(companyId ?? null, next);
+      if (patch.mapId && patch.mapId !== previous.mapId) {
+        setCamera("total");
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     setAssignments(readStoredAssignments(companyId ?? null));
+    setSettings(readOfficeSettings(companyId ?? null));
   }, [companyId]);
 
   useEffect(() => {
@@ -242,7 +341,7 @@ export function AgentPixelsCameraPage() {
       if (!direction) return;
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-      const nextCamera = ROOM_NAV[camera][direction];
+      const nextCamera = nav[camera]?.[direction];
       if (!nextCamera) return;
       event.preventDefault();
       setCamera(nextCamera);
@@ -250,7 +349,7 @@ export function AgentPixelsCameraPage() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [view, camera]);
+  }, [view, camera, nav]);
 
   useEffect(() => {
     const hostSlot = pageRef.current?.parentElement;
@@ -274,15 +373,66 @@ export function AgentPixelsCameraPage() {
         <div>
           <div style={styles.title}>Agent Pixels</div>
           <div style={{ fontSize: "12px", opacity: 0.7 }}>
-            {view === "map" ? "3D Map · All Rooms" : view === "characters" ? "Character Assignments" : `${ROOM_LABELS[camera]} Camera`}
+            {view === "map" ? "3D Map · All Rooms" : view === "characters" ? "Character Assignments" : `${cameraLabel(camera)} Camera`}
           </div>
         </div>
         <div style={styles.cameraTabs}>
-          {CAMERA_ORDER.map((cameraId, index) => (
+          <select
+            aria-label="Office map"
+            value={isClassic ? CLASSIC_MAP_ID : settings.mapId}
+            onChange={(event) => updateSettings({ mapId: event.target.value })}
+            style={styles.select}
+          >
+            <option value={CLASSIC_MAP_ID}>Classic HQ</option>
+            {MAP_DEFS.map((def) => (
+              <option key={def.id} value={def.id}>{def.label}</option>
+            ))}
+          </select>
+          <select
+            aria-label="Theme"
+            value={settings.themeId}
+            onChange={(event) => updateSettings({ themeId: event.target.value })}
+            style={styles.select}
+          >
+            {MAP_THEMES.map((theme) => (
+              <option key={theme.id} value={theme.id}>{theme.label}</option>
+            ))}
+          </select>
+          {!isClassic && (
+            <select
+              aria-label="Industry template"
+              value={settings.industryId}
+              onChange={(event) => updateSettings({ industryId: event.target.value })}
+              style={styles.select}
+            >
+              {INDUSTRY_TEMPLATES.map((industry) => (
+                <option key={industry.id} value={industry.id}>{industry.label}</option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={() => setView("map")}
+            style={{ ...styles.cameraTab, ...(view === "map" ? styles.cameraTabActive : {}) }}
+          >
+            3D Map
+          </button>
+          <button
+            type="button"
+            title={cameraLabel("total")}
+            onClick={() => {
+              setView("camera");
+              setCamera("total");
+            }}
+            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "total" ? styles.cameraTabActive : {}) }}
+          >
+            Total
+          </button>
+          {cameraOrder.map((cameraId, index) => (
             <button
               key={cameraId}
               type="button"
-              title={ROOM_LABELS[cameraId]}
+              title={cameraLabel(cameraId)}
               onClick={() => {
                 setView("camera");
                 setCamera(cameraId);
@@ -292,24 +442,6 @@ export function AgentPixelsCameraPage() {
               Camera {index + 1}
             </button>
           ))}
-          <button
-            type="button"
-            title={ROOM_LABELS.total}
-            onClick={() => {
-              setView("camera");
-              setCamera("total");
-            }}
-            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "total" ? styles.cameraTabActive : {}) }}
-          >
-            Total
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("map")}
-            style={{ ...styles.cameraTab, ...(view === "map" ? styles.cameraTabActive : {}) }}
-          >
-            3D Map
-          </button>
           <button
             type="button"
             onClick={() => setView("characters")}
@@ -327,12 +459,17 @@ export function AgentPixelsCameraPage() {
         <section aria-label="Agent Pixels office camera" style={styles.camera}>
           <PixelOfficeCanvas
             camera={view === "map" ? "map" : camera}
+            builtMap={builtMap}
+            themeId={settings.themeId}
+            roomLabels={roomLabels}
             agents={agents.length ? agents : [{ id: "placeholder", name: "No agents yet", status: "waiting", activityKind: "idle" }]}
           />
           <div style={styles.scanlines} />
           {view === "camera" && (
             <RoomNavArrows
               camera={camera}
+              nav={nav}
+              labelFor={cameraLabel}
               onNavigate={(next) => {
                 setCamera(next);
               }}
@@ -351,19 +488,29 @@ const ARROW_POSITIONS: Record<NavDirection, React.CSSProperties> = {
   right: { right: 10, top: "50%", transform: "translateY(-50%)" },
 };
 
-function RoomNavArrows({ camera, onNavigate }: { camera: CameraId; onNavigate: (next: CameraId) => void }) {
-  const nav = ROOM_NAV[camera];
+function RoomNavArrows({
+  camera,
+  nav,
+  labelFor,
+  onNavigate,
+}: {
+  camera: string;
+  nav: Record<string, Partial<Record<NavDirection, string>>>;
+  labelFor: (cameraId: string) => string;
+  onNavigate: (next: string) => void;
+}) {
+  const directions = nav[camera] ?? {};
   return (
     <>
-      {(Object.keys(nav) as NavDirection[]).map((direction) => {
-        const target = nav[direction];
+      {(Object.keys(directions) as NavDirection[]).map((direction) => {
+        const target = directions[direction];
         if (!target) return null;
         return (
           <button
             key={direction}
             type="button"
-            title={ROOM_LABELS[target]}
-            aria-label={`Go ${direction} to ${ROOM_LABELS[target]}`}
+            title={labelFor(target)}
+            aria-label={`Go ${direction} to ${labelFor(target)}`}
             onClick={() => onNavigate(target)}
             style={{ ...styles.navArrow, ...ARROW_POSITIONS[direction] }}
           >

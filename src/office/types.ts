@@ -72,6 +72,11 @@ export interface FurnitureInstance {
    * billboarding them upright. Wall-mounted items stay upright.
    */
   flat?: boolean;
+  /**
+   * Physical height (in floor pixels) used by the isometric renderer to
+   * extrude flat furniture off the floor plane. 0/undefined renders flush.
+   */
+  heightPx?: number;
 }
 
 export interface ToolActivity {

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { OfficeLayout } from "../office/types.js";
 import { TILE_SIZE } from "../office/types.js";
 import { OfficeState } from "../office/engine/officeState.js";
 import { startGameLoop } from "../office/engine/gameLoop.js";
 import { renderIsoFrame } from "../office/engine/isoRenderer.js";
 import { renderFrame } from "../office/engine/renderer.js";
-import { type CameraBounds, loadPixelAssets } from "./pixelAssets.js";
+import type { BuiltOfficeMap } from "../office/maps/index.js";
+import { getTheme } from "../office/maps/index.js";
+import { type CameraBounds, loadPixelAssets, type LoadedPixelAssets } from "./pixelAssets.js";
 
 export type CameraAgent = {
   id: string;
@@ -14,11 +17,20 @@ export type CameraAgent = {
   characterIndex?: number;
 };
 
-export type CameraView = "office" | "boardroomKitchen" | "overflowOffice" | "kitchen" | "total" | "map";
+export type RoomLabel = {
+  label: string;
+  rect: { col: number; row: number; cols: number; rows: number };
+  open: boolean;
+};
 
 type PixelOfficeCanvasProps = {
   agents: CameraAgent[];
-  camera: CameraView;
+  /** Camera id: "map" (iso), "total", a classic camera id, or a preset map camera id */
+  camera: string;
+  /** Preset map built from the map catalog; null renders the classic combined layout */
+  builtMap: BuiltOfficeMap | null;
+  themeId: string;
+  roomLabels?: RoomLabel[];
 };
 
 function stableNumericId(id: string): number {
@@ -29,12 +41,23 @@ function stableNumericId(id: string): number {
   return Math.abs(hash) || 1;
 }
 
-export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
+/** Re-tint an existing layout's tile colors with a theme (classic map theming) */
+function applyThemeToLayout(layout: OfficeLayout, themeId: string): OfficeLayout {
+  const theme = getTheme(themeId);
+  if (theme.id === "classic" || !layout.tileColors) return layout;
+  return {
+    ...layout,
+    tileColors: layout.tileColors.map((color) => (color ? theme.adjust(color) : color)),
+  };
+}
+
+export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabels }: PixelOfficeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const officeRef = useRef<OfficeState | null>(null);
-  const cameraBoundsRef = useRef<Record<Exclude<CameraView, "map">, CameraBounds> | null>(null);
+  const assetsRef = useRef<LoadedPixelAssets | null>(null);
   const [ready, setReady] = useState(false);
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const agentMeta = useMemo(
     () => new Map(agents.map((agent) => [stableNumericId(agent.id), agent] as const)),
@@ -45,11 +68,9 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
     let cancelled = false;
 
     void loadPixelAssets()
-      .then(({ layouts, cameraBounds }) => {
+      .then((assets) => {
         if (cancelled) return;
-        const office = new OfficeState(layouts.combined);
-        cameraBoundsRef.current = cameraBounds;
-        officeRef.current = office;
+        assetsRef.current = assets;
         setReady(true);
       })
       .catch((error: unknown) => {
@@ -62,9 +83,24 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
     };
   }, []);
 
+  // (Re)build office state whenever the selected map or theme changes
+  useEffect(() => {
+    const assets = assetsRef.current;
+    if (!assets || !ready) return;
+    const layout = builtMap
+      ? builtMap.layout
+      : applyThemeToLayout(assets.layouts.combined, themeId);
+    if (officeRef.current) {
+      officeRef.current.rebuildFromLayout(layout);
+    } else {
+      officeRef.current = new OfficeState(layout);
+    }
+    setLayoutVersion((version) => version + 1);
+  }, [ready, builtMap, themeId]);
+
   useEffect(() => {
     const office = officeRef.current;
-    if (!office || !ready) return;
+    if (!office || layoutVersion === 0) return;
 
     const incoming = new Set(agents.map((agent) => stableNumericId(agent.id)));
     for (const agent of agents) {
@@ -84,14 +120,14 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
     for (const id of office.characters.keys()) {
       if (!incoming.has(id)) office.removeAgent(id);
     }
-  }, [agents, ready]);
+  }, [agents, layoutVersion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     const office = officeRef.current;
-    const cameraBounds = cameraBoundsRef.current;
-    if (!canvas || !wrap || !office || !cameraBounds || !ready) return;
+    const assets = assetsRef.current;
+    if (!canvas || !wrap || !office || !assets || layoutVersion === 0) return;
 
     const activeCanvas = canvas;
     const activeWrap = wrap;
@@ -108,6 +144,49 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(activeWrap);
+
+    function resolveBounds(): CameraBounds {
+      const layout = office!.getLayout();
+      const total: CameraBounds = { col: 0, row: 0, cols: layout.cols, rows: layout.rows };
+      if (camera === "total") return total;
+      if (builtMap) {
+        return builtMap.cameras.find((entry) => entry.id === camera)?.bounds ?? total;
+      }
+      const classic = assets!.cameraBounds as unknown as Record<string, CameraBounds>;
+      return classic[camera] ?? total;
+    }
+
+    function drawRoomLabels(
+      ctx: CanvasRenderingContext2D,
+      offsetX: number,
+      offsetY: number,
+      zoom: number,
+    ) {
+      if (!roomLabels || roomLabels.length === 0) return;
+      ctx.save();
+      const fontSize = Math.max(9, Math.floor(4.5 * zoom));
+      ctx.font = `600 ${fontSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const room of roomLabels) {
+        const centerX = offsetX + (room.rect.col + room.rect.cols / 2) * TILE_SIZE * zoom;
+        const topY = offsetY + (room.rect.row + (room.open ? 0.6 : 1.5)) * TILE_SIZE * zoom;
+        const text = room.label.toUpperCase();
+        const metrics = ctx.measureText(text);
+        const padX = fontSize * 0.6;
+        const padY = fontSize * 0.35;
+        ctx.fillStyle = "rgba(9,13,24,0.82)";
+        ctx.fillRect(
+          centerX - metrics.width / 2 - padX,
+          topY - fontSize / 2 - padY,
+          metrics.width + padX * 2,
+          fontSize + padY * 2,
+        );
+        ctx.fillStyle = "#f3f4f6";
+        ctx.fillText(text, centerX, topY);
+      }
+      ctx.restore();
+    }
 
     const stop = startGameLoop(canvas, {
       update: (dt) => office.update(dt),
@@ -145,7 +224,7 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
           return;
         }
 
-        const focus = cameraBounds[camera];
+        const focus = resolveBounds();
         const dpr = window.devicePixelRatio || 1;
         const fitZoom = Math.min(
           canvas.width / (focus.cols * TILE_SIZE),
@@ -184,6 +263,8 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
           layout.rows,
         );
 
+        drawRoomLabels(ctx, offsetX, offsetY, zoom);
+
         ctx.save();
         ctx.font = `${Math.max(10, Math.floor(5 * zoom))}px sans-serif`;
         ctx.textAlign = "center";
@@ -207,7 +288,7 @@ export function PixelOfficeCanvas({ agents, camera }: PixelOfficeCanvasProps) {
       observer.disconnect();
       stop();
     };
-  }, [agentMeta, camera, ready]);
+  }, [agentMeta, camera, builtMap, roomLabels, layoutVersion]);
 
   return (
     <div ref={wrapRef} style={{ position: "relative", width: "100%", height: "min(725px, calc(100vh - 185px))", minHeight: "520px" }}>

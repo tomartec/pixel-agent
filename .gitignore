@@ -5,3 +5,4 @@ dist
 release
 .paperclip-sdk
 .claude/
+.DS_Store

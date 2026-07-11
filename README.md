@@ -17,6 +17,27 @@ This repo (`tomartec/pixel-agent`) is maintained independently, built on the off
   - **Total** — flat top-down view of the entire floor.
   - **3D Map** — isometric view of the whole office: the floor plane is projected at 45°, walls and characters stand upright, furniture lies on the floor.
 - Includes assignable character sprites so each agent can have a consistent look.
+- **Office maps** — besides the classic HQ, seven preset floor plans (based on the reference art in `docs/option1-7.png`): Central Hub, Open Studio, The Boulevard, Campus Mini, Team Pods, Creative Loft, and Hybrid Office. Selectable from the camera page header; the choice is saved per company.
+- **Themes** — every map (including the classic HQ) can be re-tinted with a theme: Classic, Midnight, Pastel, Forest, Sunset, Monochrome, Neon, or Retro.
+- **Industry templates** — preset maps can relabel their rooms for different kinds of companies (Software Company, Creative Agency, E-commerce, Game Studio) without changing the floor plan.
+
+## Choosing a Map, Theme, and Industry Template
+
+The camera page header has three dropdowns (left of the camera buttons). All choices are saved per company in the browser, so each company can have its own office look.
+
+- **Map** — picks the floor plan:
+  - **Classic HQ** (default) — the original four-room office.
+  - **Central Hub** — rooms ring a central reception/lounge hub.
+  - **Open Studio** — open colored zones with only a few walled rooms.
+  - **The Boulevard** — rooms flank a long central promenade with planters and sofas.
+  - **Campus Mini** — rooms around a green garden courtyard.
+  - **Team Pods** — open team pods on a shared floor.
+  - **Creative Loft** — one big loft with work zones, a lounge, and a game corner.
+  - **Hybrid Office** — an open work zone and collaboration hub surrounded by private rooms.
+- **Theme** — re-tints the floors, walls, and desks of any map: Classic, Midnight, Pastel, Forest, Sunset, Monochrome, Neon, or Retro.
+- **Industry template** (preset maps only) — relabels the rooms so the same floor plan reads as a different company: Software Company, Creative Agency, E-commerce, or Game Studio. Only the room name plates change; the layout stays the same.
+
+Camera buttons follow the dropdowns: **3D Map** (isometric view), **Total** (whole-floor view, the default), and **Camera 1–4** (quadrant views, also switchable with the arrow keys or the on-screen arrows).
 
 ## Screenshots
 
@@ -25,6 +46,23 @@ This repo (`tomartec/pixel-agent`) is maintained independently, built on the off
 ![Agent Pixels character picker screenshot](public/assets/brand/agent-pixels-screenshot-characters.jpg)
 
 ## Install
+
+### From the Paperclip UI (recommended)
+
+The easiest way to install — no source code, CLI, or build step needed. The plugin is published on npm as [`@tomartec/pixel-agent`](https://www.npmjs.com/package/@tomartec/pixel-agent).
+
+1. Open Paperclip in your browser.
+2. Go to **Plugins** (instance settings → Plugins).
+3. Click **Install Plugin**.
+4. Enter the npm package name:
+
+   ```text
+   @tomartec/pixel-agent
+   ```
+
+5. Confirm the install. Paperclip downloads the package from npm and loads it.
+
+After installing, **Agent Pixels** appears in the sidebar; open it to see the live office camera. To update later, reinstall with the same package name to pull the latest published version.
 
 ### Release Version
 
@@ -48,7 +86,7 @@ Download the latest `agent-pixels-*.zip` from the GitHub Releases page, then unz
 After unzipping, you should have a folder like this:
 
 ```text
-agent-pixels-2026.710.0/
+agent-pixels-2026.711.0/
   package.json
   README.md
   dist/
@@ -60,7 +98,7 @@ agent-pixels-2026.710.0/
 For Docker installs, unzip the release into a bind-mounted folder and install the path as seen from inside the container, for example:
 
 ```text
-/paperclip/plugins/agent-pixels-2026.710.0
+/paperclip/plugins/agent-pixels-2026.711.0
 ```
 
 ### Development Version
@@ -119,10 +157,10 @@ This requires the `zip` command-line tool. The ZIP is written to `release/`.
 
 ### npm Package
 
-The plugin is also published as [`@tomartec/pixel-agent`](https://www.npmjs.com/package/@tomartec/pixel-agent). In Paperclip's **Install Plugin** dialog, enter the npm package name directly:
+The plugin is published as [`@tomartec/pixel-agent`](https://www.npmjs.com/package/@tomartec/pixel-agent) — see [From the Paperclip UI](#from-the-paperclip-ui-recommended) above for the recommended install flow. The same package name also works with the CLI:
 
-```text
-@tomartec/pixel-agent
+```bash
+paperclipai plugin install @tomartec/pixel-agent
 ```
 
 ## Development
