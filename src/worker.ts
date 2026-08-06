@@ -51,8 +51,15 @@ const plugin = definePlugin({
     for (const [eventType, kind] of AGENT_EVENTS) {
       ctx.events.on(eventType, async (event) => {
         const payload = typeof event.payload === "object" && event.payload !== null ? event.payload : null;
-        // The real host event shape has not yet been verified, so run events defensively fall back to payload.agentId.
-        const agentId = event.entityId ?? (payload && "agentId" in payload && typeof payload.agentId === "string" ? payload.agentId : null);
+        const payloadAgentId =
+          payload && "agentId" in payload && typeof payload.agentId === "string" ? payload.agentId : null;
+        // `agent.status_changed` / `agent.updated` carry the agent as the entity, but
+        // `agent.run.*` carry the run — reading entityId unconditionally would hand
+        // ctx.agents.get a run id and silently drop every run event. Trust entityId
+        // only when the host says it is an agent; otherwise take payload.agentId.
+        // The real host payload shape is still unverified, hence the final fallback.
+        const agentId =
+          event.entityType === "agent" ? event.entityId : (payloadAgentId ?? event.entityId ?? null);
         if (!agentId) return;
 
         const agent = await ctx.agents.get(agentId, event.companyId);
