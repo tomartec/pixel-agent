@@ -535,6 +535,21 @@ export function AgentPixelsCameraPage() {
               ))}
             </select>
           )}
+          <select
+            aria-label="Camera"
+            value={view === "camera" ? camera : ""}
+            onChange={(event) => {
+              setView("camera");
+              setCamera(event.target.value);
+            }}
+            style={styles.select}
+          >
+            <option value="" disabled hidden>Camera</option>
+            <option value="total">{cameraLabel("total")}</option>
+            {cameraOrder.map((cameraId) => (
+              <option key={cameraId} value={cameraId}>{cameraLabel(cameraId)}</option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => setView("map")}
@@ -542,31 +557,6 @@ export function AgentPixelsCameraPage() {
           >
             3D Map
           </button>
-          <button
-            type="button"
-            title={cameraLabel("total")}
-            onClick={() => {
-              setView("camera");
-              setCamera("total");
-            }}
-            style={{ ...styles.cameraTab, ...(view === "camera" && camera === "total" ? styles.cameraTabActive : {}) }}
-          >
-            Total
-          </button>
-          {cameraOrder.map((cameraId, index) => (
-            <button
-              key={cameraId}
-              type="button"
-              title={cameraLabel(cameraId)}
-              onClick={() => {
-                setView("camera");
-                setCamera(cameraId);
-              }}
-              style={{ ...styles.cameraTab, ...(view === "camera" && camera === cameraId ? styles.cameraTabActive : {}) }}
-            >
-              Camera {index + 1}
-            </button>
-          ))}
           <button
             type="button"
             onClick={() => setView("characters")}
