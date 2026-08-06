@@ -573,12 +573,12 @@ export function AgentPixelsCameraPage() {
           />
           <button
             type="button"
-            title="Reset vị trí nhân vật"
-            aria-label="Reset vị trí nhân vật"
+            title="Reset character positions"
+            aria-label="Reset character positions"
             onClick={() => {
               clearPersistedOffice(companyId ?? null);
               setResetToken((token) => token + 1);
-              toast({ title: "Đã reset vị trí nhân vật", tone: "success" });
+              toast({ title: "Character positions reset", tone: "success" });
             }}
             style={styles.cameraTab}
           >
