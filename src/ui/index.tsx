@@ -378,10 +378,13 @@ export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
       style={{
         ...styles.link,
         ...(isActive ? styles.linkActive : {}),
-        justifyContent: isCollapsed ? "center" : undefined,
-        margin: isCollapsed ? 0 : undefined,
-        padding: isCollapsed ? "6px 0" : undefined,
-        opacity: isActive ? 1 : undefined,
+        // Every branch must name a concrete value: a spread key set to `undefined`
+        // overwrites what `styles.link` established, and React then clears the
+        // property outright — which silently dropped the host-matched metrics.
+        justifyContent: isCollapsed ? "center" : "flex-start",
+        margin: isCollapsed ? 0 : "0 8px",
+        padding: isCollapsed ? "6px 0" : "6px 8px",
+        opacity: isActive ? 1 : 0.8,
       }}
     >
       <span aria-hidden="true" style={styles.linkIcon}>
