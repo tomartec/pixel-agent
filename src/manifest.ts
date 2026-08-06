@@ -37,6 +37,7 @@ const manifest: PaperclipPluginManifestV1 = {
   capabilities: [
     "companies.read",
     "agents.read",
+    "events.subscribe",
     "instance.settings.register",
     "ui.sidebar.register",
     "ui.page.register",
