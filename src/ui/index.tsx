@@ -588,6 +588,8 @@ export function AgentPixelsCameraPage() {
           <PixelOfficeCanvas
             camera={view === "map" ? "map" : camera}
             builtMap={builtMap}
+            companyId={companyId ?? null}
+            mapId={settings.mapId}
             themeId={settings.themeId}
             roomLabels={roomLabels}
             agents={agents.length ? agents : [{ id: "placeholder", name: "No agents yet", status: "waiting", activityKind: "idle" }]}

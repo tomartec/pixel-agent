@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OfficeLayout } from "../office/types.js";
+import type { Direction, OfficeLayout } from "../office/types.js";
 import { TILE_SIZE } from "../office/types.js";
 import { OfficeState } from "../office/engine/officeState.js";
 import { startGameLoop } from "../office/engine/gameLoop.js";
@@ -8,6 +8,11 @@ import { renderFrame } from "../office/engine/renderer.js";
 import type { BuiltOfficeMap } from "../office/maps/index.js";
 import { getTheme } from "../office/maps/index.js";
 import { type CameraBounds, loadPixelAssets, type LoadedPixelAssets } from "./pixelAssets.js";
+import {
+  readPersistedOffice,
+  type PersistedCharacter,
+  writePersistedOffice,
+} from "./officePersistence.js";
 
 export type CameraAgent = {
   id: string;
@@ -31,6 +36,8 @@ type PixelOfficeCanvasProps = {
   camera: string;
   /** Preset map built from the map catalog; null renders the classic combined layout */
   builtMap: BuiltOfficeMap | null;
+  companyId: string | null;
+  mapId: string;
   themeId: string;
   roomLabels?: RoomLabel[];
 };
@@ -53,12 +60,14 @@ function applyThemeToLayout(layout: OfficeLayout, themeId: string): OfficeLayout
   };
 }
 
-export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabels }: PixelOfficeCanvasProps) {
+export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, themeId, roomLabels }: PixelOfficeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const officeRef = useRef<OfficeState | null>(null);
   const assetsRef = useRef<LoadedPixelAssets | null>(null);
   const previousBubbleStatesRef = useRef(new Map<number, { pendingApproval: boolean; waiting: boolean }>());
+  const persistedRef = useRef<Record<string, PersistedCharacter>>({});
+  const persistRef = useRef<() => void>(() => {});
   const [ready, setReady] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -98,8 +107,9 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabel
     } else {
       officeRef.current = new OfficeState(layout);
     }
+    persistedRef.current = readPersistedOffice(companyId, mapId, themeId);
     setLayoutVersion((version) => version + 1);
-  }, [ready, builtMap, themeId]);
+  }, [ready, builtMap, companyId, mapId, themeId]);
 
   useEffect(() => {
     const office = officeRef.current;
@@ -108,8 +118,19 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabel
     const incoming = new Set(agents.map((agent) => stableNumericId(agent.id)));
     for (const agent of agents) {
       const id = stableNumericId(agent.id);
-      office.addAgent(id, agent.characterIndex, 0, undefined, true);
+      const saved = persistedRef.current[agent.id];
+      const isNew = !office.characters.has(id);
+      office.addAgent(id, agent.characterIndex, 0, saved?.seatId ?? undefined, true);
       const character = office.characters.get(id);
+      if (isNew && saved && character?.seatId === saved.seatId) {
+        character.tileCol = saved.tileCol;
+        character.tileRow = saved.tileRow;
+        character.x = saved.tileCol * TILE_SIZE + TILE_SIZE / 2;
+        character.y = saved.tileRow * TILE_SIZE + TILE_SIZE / 2;
+        character.dir = saved.dir as Direction;
+        character.path = [];
+        character.moveProgress = 0;
+      }
       if (character && agent.characterIndex !== undefined) {
         if (character.palette !== agent.characterIndex) character.palette = agent.characterIndex;
         if (character.hueShift !== 0) character.hueShift = 0;
@@ -143,6 +164,43 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabel
       }
     }
   }, [agents, layoutVersion]);
+
+  useEffect(() => {
+    if (layoutVersion === 0) return;
+
+    function persist() {
+      const office = officeRef.current;
+      if (!office) return;
+      const characters: Record<string, PersistedCharacter> = {};
+      for (const agent of agents) {
+        const character = office.characters.get(stableNumericId(agent.id));
+        if (!character) continue;
+        characters[agent.id] = {
+          seatId: character.seatId,
+          tileCol: character.tileCol,
+          tileRow: character.tileRow,
+          dir: character.dir,
+          palette: character.palette,
+          hueShift: character.hueShift,
+        };
+      }
+      writePersistedOffice(companyId, { version: 1, mapId, themeId, characters });
+    }
+    persistRef.current = persist;
+
+    const interval = window.setInterval(persist, 2_000);
+    function onPageExit() {
+      persist();
+    }
+    window.addEventListener("visibilitychange", onPageExit);
+    window.addEventListener("pagehide", onPageExit);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("visibilitychange", onPageExit);
+      window.removeEventListener("pagehide", onPageExit);
+      persist();
+    };
+  }, [agents, companyId, layoutVersion, mapId, themeId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -308,6 +366,7 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabel
 
     return () => {
       observer.disconnect();
+      persistRef.current();
       stop();
     };
   }, [agentMeta, camera, builtMap, roomLabels, layoutVersion]);
