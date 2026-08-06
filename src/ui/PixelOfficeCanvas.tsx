@@ -15,6 +15,8 @@ export type CameraAgent = {
   status?: string | null;
   activityKind?: "coding" | "research" | "writing" | "meeting" | "idle";
   characterIndex?: number;
+  pendingApproval?: boolean;
+  waiting?: boolean;
 };
 
 export type RoomLabel = {
@@ -56,6 +58,7 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabel
   const wrapRef = useRef<HTMLDivElement>(null);
   const officeRef = useRef<OfficeState | null>(null);
   const assetsRef = useRef<LoadedPixelAssets | null>(null);
+  const previousBubbleStatesRef = useRef(new Map<number, { pendingApproval: boolean; waiting: boolean }>());
   const [ready, setReady] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -114,11 +117,30 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, themeId, roomLabel
       const activity = agent.activityKind ?? "idle";
       const isWorking = activity !== "idle";
       if (character && character.isActive !== isWorking) office.setAgentActive(id, isWorking);
-      const nextTool = activity === "research" ? "Read" : isWorking ? "Edit" : null;
+      const nextTool = activity === "research"
+        ? "Read"
+        : activity === "writing"
+          ? "Write"
+          : activity === "coding"
+            ? "Edit"
+            : activity === "meeting"
+              ? "Task"
+              : null;
       if (character && character.currentTool !== nextTool) office.setAgentTool(id, nextTool);
+
+      const previous = previousBubbleStatesRef.current.get(id) ?? { pendingApproval: false, waiting: false };
+      const pendingApproval = agent.pendingApproval === true;
+      const waiting = agent.waiting === true;
+      if (pendingApproval && !previous.pendingApproval) office.showPermissionBubble(id);
+      if (!pendingApproval && previous.pendingApproval) office.clearPermissionBubble(id);
+      if (waiting && !previous.waiting) office.showWaitingBubble(id);
+      previousBubbleStatesRef.current.set(id, { pendingApproval, waiting });
     }
     for (const id of office.characters.keys()) {
-      if (!incoming.has(id)) office.removeAgent(id);
+      if (!incoming.has(id)) {
+        office.removeAgent(id);
+        previousBubbleStatesRef.current.delete(id);
+      }
     }
   }, [agents, layoutVersion]);
 

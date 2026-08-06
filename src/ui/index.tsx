@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useHostContext, usePluginData, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
+import { useHostContext, usePluginData, usePluginStream, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
 import { PAGE_ROUTE } from "../manifest.js";
+import type { ActivityKind, AgentLiveEvent } from "../worker.js";
 import {
   buildOfficeMap,
   getIndustry,
@@ -15,14 +16,21 @@ import { getPluginAssetBaseUrl, type AssetIndex } from "./pixelAssets.js";
 
 type CameraRoomData = {
   room: string;
+  fetchedAt?: string;
   agents: Array<{
     id: string;
     name: string;
     status?: string | null;
     urlKey?: string | null;
-    activityKind?: "coding" | "research" | "writing" | "meeting" | "idle";
+    activityKind?: ActivityKind;
     characterIndex?: number;
   }>;
+};
+
+type LiveOverride = {
+  status: string | null;
+  activityKind: ActivityKind;
+  at: string;
 };
 
 type CharacterSettingsData = {
@@ -101,6 +109,74 @@ function readOfficeSettings(companyId: string | null): OfficeSettings {
 
 function writeOfficeSettings(companyId: string | null, settings: OfficeSettings) {
   window.localStorage.setItem(officeSettingsKey(companyId), JSON.stringify(settings));
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  return reduced;
+}
+
+function LiveStatusBadge({
+  companyId,
+  connected,
+  connecting,
+  error,
+  fetchedAt,
+}: {
+  companyId: string | null;
+  connected: boolean;
+  connecting: boolean;
+  error: Error | null;
+  fetchedAt?: string;
+}) {
+  const dotRef = useRef<HTMLSpanElement>(null);
+  const hasConnectedRef = useRef(false);
+  const previousCompanyIdRef = useRef(companyId);
+  const reducedMotion = useReducedMotion();
+  if (previousCompanyIdRef.current !== companyId) {
+    previousCompanyIdRef.current = companyId;
+    hasConnectedRef.current = false;
+  }
+  if (connected) hasConnectedRef.current = true;
+
+  const reconnecting = !connected && hasConnectedRef.current;
+  const isConnecting = companyId !== null && !error && (connecting || reconnecting);
+  const label = connected ? "Live" : isConnecting ? (reconnecting ? "Reconnecting..." : "Connecting") : "Offline";
+  const color = connected ? "#22c55e" : isConnecting ? "#f59e0b" : "#ef4444";
+  const duration = connected ? 1800 : isConnecting ? 900 : null;
+
+  useEffect(() => {
+    if (duration === null || reducedMotion || !dotRef.current) return;
+    const animation = dotRef.current.animate(
+      [{ opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }],
+      { duration, iterations: Infinity, easing: "ease-in-out" },
+    );
+    return () => animation.cancel();
+  }, [duration, reducedMotion]);
+
+  const ageSeconds = fetchedAt ? Math.floor((Date.now() - new Date(fetchedAt).getTime()) / 1_000) : 0;
+  const age = ageSeconds > 60
+    ? ` · ${ageSeconds >= 3_600 ? `${Math.floor(ageSeconds / 3_600)}h` : `${Math.floor(ageSeconds / 60)}m`} ago`
+    : "";
+
+  return (
+    <span role="status" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "12px", opacity: 0.9 }}>
+      <span ref={dotRef} aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: color }} />
+      <span>{label}{age}</span>
+    </span>
+  );
 }
 
 const ARROW_GLYPHS: Record<NavDirection, string> = {
@@ -282,11 +358,28 @@ export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
 export function AgentPixelsCameraPage() {
   const pageRef = useRef<HTMLElement>(null);
   const { companyId } = useHostContext();
-  const { data, loading, error } = usePluginData<CameraRoomData>("camera-room", { companyId });
+  const { data, refresh } = usePluginData<CameraRoomData>("camera-room", { companyId });
+  const { lastEvent, connecting, connected, error: streamError, close } = usePluginStream<AgentLiveEvent>(
+    `agent-activity:${companyId ?? ""}`,
+    { companyId: companyId ?? undefined },
+  );
   const [assignments, setAssignments] = useState<Record<string, number>>(() => readStoredAssignments(companyId ?? null));
+  const [liveOverrides, setLiveOverrides] = useState<Record<string, LiveOverride>>({});
+  const wasConnectedRef = useRef(false);
   const agents = useMemo(
-    () => (data?.agents ?? []).map((agent) => ({ ...agent, characterIndex: assignments[agent.id] })),
-    [assignments, data?.agents],
+    () => (data?.agents ?? []).map((agent) => {
+      const override = liveOverrides[agent.id];
+      const status = override?.status ?? agent.status;
+      return {
+        ...agent,
+        status,
+        activityKind: override?.activityKind ?? agent.activityKind,
+        characterIndex: assignments[agent.id],
+        pendingApproval: status === "pending_approval",
+        waiting: status === "idle" || status === "paused",
+      };
+    }),
+    [assignments, data?.agents, liveOverrides],
   );
   const [settings, setSettings] = useState<OfficeSettings>(() => readOfficeSettings(companyId ?? null));
   const isClassic = settings.mapId === CLASSIC_MAP_ID || !getMapDef(settings.mapId);
@@ -331,7 +424,36 @@ export function AgentPixelsCameraPage() {
   useEffect(() => {
     setAssignments(readStoredAssignments(companyId ?? null));
     setSettings(readOfficeSettings(companyId ?? null));
+    setLiveOverrides({});
   }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) close();
+  }, [companyId, close]);
+
+  useEffect(() => {
+    if (!lastEvent) return;
+    setLiveOverrides((previous) => ({
+      ...previous,
+      [lastEvent.agentId]: {
+        status: lastEvent.status,
+        activityKind: lastEvent.activityKind,
+        at: lastEvent.at,
+      },
+    }));
+  }, [lastEvent]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      refresh();
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (connected && !wasConnectedRef.current) refresh();
+    wasConnectedRef.current = connected;
+  }, [connected, refresh]);
 
   useEffect(() => {
     if (view !== "camera") return;
@@ -449,7 +571,13 @@ export function AgentPixelsCameraPage() {
           >
             Characters
           </button>
-          <div style={{ fontSize: "12px", opacity: 0.7 }}>{loading ? "Connecting" : error ? "Offline" : "Live"}</div>
+          <LiveStatusBadge
+            companyId={companyId ?? null}
+            connected={connected}
+            connecting={connecting}
+            error={streamError}
+            fetchedAt={data?.fetchedAt}
+          />
         </div>
       </header>
 
