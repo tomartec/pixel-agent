@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useHostContext, usePluginData, usePluginStream, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
+import { useHostContext, usePluginData, usePluginStream, usePluginToast, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
 import { PAGE_ROUTE } from "../manifest.js";
 import type { ActivityKind, AgentLiveEvent } from "../worker.js";
 import {
@@ -13,6 +13,7 @@ import {
 } from "../office/maps/index.js";
 import { PixelOfficeCanvas, type RoomLabel } from "./PixelOfficeCanvas.js";
 import { getPluginAssetBaseUrl, type AssetIndex } from "./pixelAssets.js";
+import { clearPersistedOffice } from "./officePersistence.js";
 
 type CameraRoomData = {
   room: string;
@@ -358,6 +359,7 @@ export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
 export function AgentPixelsCameraPage() {
   const pageRef = useRef<HTMLElement>(null);
   const { companyId } = useHostContext();
+  const toast = usePluginToast();
   const { data, refresh } = usePluginData<CameraRoomData>("camera-room", { companyId });
   const { lastEvent, connecting, connected, error: streamError, close } = usePluginStream<AgentLiveEvent>(
     `agent-activity:${companyId ?? ""}`,
@@ -385,6 +387,7 @@ export function AgentPixelsCameraPage() {
   const isClassic = settings.mapId === CLASSIC_MAP_ID || !getMapDef(settings.mapId);
   const [camera, setCamera] = useState<string>("total");
   const [view, setView] = useState<"camera" | "map" | "characters">("camera");
+  const [resetToken, setResetToken] = useState(0);
 
   const builtMap = useMemo(() => {
     if (isClassic) return null;
@@ -578,6 +581,19 @@ export function AgentPixelsCameraPage() {
             error={streamError}
             fetchedAt={data?.fetchedAt}
           />
+          <button
+            type="button"
+            title="Reset vị trí nhân vật"
+            aria-label="Reset vị trí nhân vật"
+            onClick={() => {
+              clearPersistedOffice(companyId ?? null);
+              setResetToken((token) => token + 1);
+              toast({ title: "Đã reset vị trí nhân vật", tone: "success" });
+            }}
+            style={styles.cameraTab}
+          >
+            ↺
+          </button>
         </div>
       </header>
 
@@ -591,6 +607,7 @@ export function AgentPixelsCameraPage() {
             companyId={companyId ?? null}
             mapId={settings.mapId}
             themeId={settings.themeId}
+            resetToken={resetToken}
             roomLabels={roomLabels}
             agents={agents.length ? agents : [{ id: "placeholder", name: "No agents yet", status: "waiting", activityKind: "idle" }]}
           />

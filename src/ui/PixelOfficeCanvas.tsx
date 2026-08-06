@@ -39,6 +39,7 @@ type PixelOfficeCanvasProps = {
   companyId: string | null;
   mapId: string;
   themeId: string;
+  resetToken: number;
   roomLabels?: RoomLabel[];
 };
 
@@ -60,12 +61,13 @@ function applyThemeToLayout(layout: OfficeLayout, themeId: string): OfficeLayout
   };
 }
 
-export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, themeId, roomLabels }: PixelOfficeCanvasProps) {
+export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, themeId, resetToken, roomLabels }: PixelOfficeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const officeRef = useRef<OfficeState | null>(null);
   const assetsRef = useRef<LoadedPixelAssets | null>(null);
   const previousBubbleStatesRef = useRef(new Map<number, { pendingApproval: boolean; waiting: boolean }>());
+  const lastResetTokenRef = useRef(resetToken);
   const persistedRef = useRef<Record<string, PersistedCharacter>>({});
   const persistRef = useRef<() => void>(() => {});
   const [ready, setReady] = useState(false);
@@ -102,6 +104,10 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
     const layout = builtMap
       ? builtMap.layout
       : applyThemeToLayout(assets.layouts.combined, themeId);
+    if (resetToken !== lastResetTokenRef.current) {
+      officeRef.current = null;
+      lastResetTokenRef.current = resetToken;
+    }
     if (officeRef.current) {
       officeRef.current.rebuildFromLayout(layout);
     } else {
@@ -109,7 +115,7 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
     }
     persistedRef.current = readPersistedOffice(companyId, mapId, themeId);
     setLayoutVersion((version) => version + 1);
-  }, [ready, builtMap, companyId, mapId, themeId]);
+  }, [ready, builtMap, companyId, mapId, themeId, resetToken]);
 
   useEffect(() => {
     const office = officeRef.current;

@@ -66,3 +66,12 @@ export function writePersistedOffice(companyId: string | null, office: Persisted
     // Storage can be unavailable or full; persistence is best effort.
   }
 }
+
+export function clearPersistedOffice(companyId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(officeStateKey(companyId));
+  } catch {
+    // Storage can be unavailable; clearing persisted state is best effort.
+  }
+}
