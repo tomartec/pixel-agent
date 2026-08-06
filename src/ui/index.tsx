@@ -222,16 +222,19 @@ function writeStoredAssignments(companyId: string | null, assignments: Record<st
 }
 
 const styles = {
+  // Measured from the host sidebar item on 2026-08-07; update if the host theme changes.
   link: {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
-    padding: "6px 12px",
-    fontSize: "13px",
+    margin: "0 8px",
+    gap: "10px",
+    padding: "6px 8px",
+    fontSize: "var(--text-compact, 13px)",
     fontWeight: 500,
     textDecoration: "none",
-    borderRadius: "6px",
+    borderRadius: "8px",
     color: "var(--foreground)",
+    opacity: 0.8,
     overflow: "hidden",
   } as React.CSSProperties,
   linkActive: {
@@ -239,6 +242,10 @@ const styles = {
   } as React.CSSProperties,
   linkIcon: {
     flexShrink: 0,
+    width: 16,
+    height: 16,
+    display: "grid",
+    placeItems: "center",
   } as React.CSSProperties,
   linkLabel: {
     flex: 1,
@@ -345,13 +352,55 @@ const styles = {
 } as const;
 
 export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
+  const linkRef = useRef<HTMLAnchorElement>(null);
   const href = cameraPagePath(context.companyPrefix);
   const isActive = typeof window !== "undefined" && window.location.pathname.startsWith(href);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    const parent = linkRef.current?.parentElement;
+    if (!parent || typeof ResizeObserver === "undefined") return;
+
+    const updateCollapsed = () => setIsCollapsed(parent.getBoundingClientRect().width < 120);
+    updateCollapsed();
+
+    const observer = new ResizeObserver(updateCollapsed);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <a href={href} aria-current={isActive ? "page" : undefined} style={{ ...styles.link, ...(isActive ? styles.linkActive : {}) }}>
-      <span aria-hidden="true" style={styles.linkIcon}>▣</span>
-      <span style={styles.linkLabel}>Agent Pixels</span>
+    <a
+      ref={linkRef}
+      href={href}
+      aria-current={isActive ? "page" : undefined}
+      title={isCollapsed ? "Agent Pixels" : undefined}
+      style={{
+        ...styles.link,
+        ...(isActive ? styles.linkActive : {}),
+        justifyContent: isCollapsed ? "center" : undefined,
+        margin: isCollapsed ? 0 : undefined,
+        padding: isCollapsed ? "6px 0" : undefined,
+        opacity: isActive ? 1 : undefined,
+      }}
+    >
+      <span aria-hidden="true" style={styles.linkIcon}>
+        <svg
+          width={16}
+          height={16}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <rect x="9" y="9" width="6" height="6" fill="currentColor" stroke="none" />
+        </svg>
+      </span>
+      <span style={{ ...styles.linkLabel, display: isCollapsed ? "none" : undefined }}>Agent Pixels</span>
     </a>
   );
 }
