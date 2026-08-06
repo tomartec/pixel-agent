@@ -45,8 +45,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@paperclipai/plugin-sdk": "^2026.618.0",
-    "@paperclipai/shared": "^2026.618.0"
+    "@paperclipai/plugin-sdk": "^2026.722.0",
+    "@paperclipai/shared": "^2026.722.0"
   },
   "devDependencies": {
     "@rollup/plugin-json": "^6.1.0",

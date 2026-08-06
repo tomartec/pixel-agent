@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@paperclipai/plugin-sdk':
-        specifier: ^2026.618.0
-        version: 2026.618.0(react@19.2.5)
+        specifier: ^2026.722.0
+        version: 2026.722.0(react@19.2.5)
       '@paperclipai/shared':
-        specifier: ^2026.618.0
-        version: 2026.618.0
+        specifier: ^2026.722.0
+        version: 2026.722.0
     devDependencies:
       '@rollup/plugin-json':
         specifier: ^6.1.0
@@ -216,8 +216,8 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@paperclipai/plugin-sdk@2026.618.0':
-    resolution: {integrity: sha512-/8hoPh4x70/1HoaAe8Hofej1Ww5RLpMfbQb8fiXpRcLY9MkEN7XjzR0jVqTw4y2bwed+xQRhPJ5QRcviM/lPkA==}
+  '@paperclipai/plugin-sdk@2026.722.0':
+    resolution: {integrity: sha512-2rMJCBo8ZAouuMsapdaY4/l+oHmrXKHW/k/HfPOLCxFng7+g04c5JhoFq+/ptGfNcW3kXzs34y7brviDCml06Q==}
     hasBin: true
     peerDependencies:
       react: '>=18'
@@ -225,8 +225,8 @@ packages:
       react:
         optional: true
 
-  '@paperclipai/shared@2026.618.0':
-    resolution: {integrity: sha512-DqfQLUiWHhYRXFtMpPCeXpB+21obNYFnqcr4bEPdRrA83l5YS/SolsqfnHu8Mj65iiSrHGhQGGc7q4kvQkV2qw==}
+  '@paperclipai/shared@2026.722.0':
+    resolution: {integrity: sha512-JciI6EbtNwHSeoyN5ZkshwqpyfIluyO46JHp8I7pPCvpJ7Uv7MSZEBs3lKXdXLadFEN6qzfwNmf39xjIFC8isA==}
 
   '@rollup/plugin-json@6.1.0':
     resolution: {integrity: sha512-EGI2te5ENk1coGeADSIwZ7G2Q8CJS2sF120T7jLw4xFw9n7wIOXHo+kIYRAoVpJAN+kmqZSoO3Fp4JtoNF4ReA==}
@@ -807,14 +807,14 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@paperclipai/plugin-sdk@2026.618.0(react@19.2.5)':
+  '@paperclipai/plugin-sdk@2026.722.0(react@19.2.5)':
     dependencies:
-      '@paperclipai/shared': 2026.618.0
+      '@paperclipai/shared': 2026.722.0
       zod: 3.25.76
     optionalDependencies:
       react: 19.2.5
 
-  '@paperclipai/shared@2026.618.0':
+  '@paperclipai/shared@2026.722.0':
     dependencies:
       zod: 3.25.76
 
