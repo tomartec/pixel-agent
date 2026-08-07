@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useHostContext, usePluginData, usePluginStream, usePluginToast, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
+import { useHostContext, useHostNavigation, usePluginData, usePluginStream, usePluginToast, type PluginSettingsPageProps, type PluginSidebarProps } from "@paperclipai/plugin-sdk/ui";
 import { PAGE_ROUTE } from "../manifest.js";
 import type { ActivityKind, AgentLiveEvent } from "../worker.js";
 import {
@@ -23,6 +23,11 @@ type CameraRoomData = {
     name: string;
     status?: string | null;
     urlKey?: string | null;
+    // Sent by the worker's camera-room handler and surfaced in the detail
+    // panel. Declared here because omitting them type-checks fine — the panel
+    // takes them as optional — while silently rendering an empty Role row.
+    role?: string | null;
+    title?: string | null;
     activityKind?: ActivityKind;
     characterIndex?: number;
     taskTitle?: string | null;
@@ -455,6 +460,8 @@ export function AgentPixelsCameraPage() {
   const [camera, setCamera] = useState<string>("total");
   const [view, setView] = useState<"camera" | "map" | "characters">("camera");
   const [resetToken, setResetToken] = useState(0);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
 
   const builtMap = useMemo(() => {
     if (isClassic) return null;
@@ -667,9 +674,14 @@ export function AgentPixelsCameraPage() {
             themeId={settings.themeId}
             resetToken={resetToken}
             roomLabels={roomLabels}
+            selectedAgentId={selectedAgentId}
+            onSelectAgent={setSelectedAgentId}
             agents={agents.length ? agents : [{ id: "placeholder", name: "No agents yet", status: "waiting", activityKind: "idle" }]}
           />
           <div style={styles.scanlines} />
+          {selectedAgent && (
+            <AgentDetailPanel agent={selectedAgent} onClose={() => setSelectedAgentId(null)} />
+          )}
           {view === "camera" && (
             <RoomNavArrows
               camera={camera}
@@ -683,6 +695,101 @@ export function AgentPixelsCameraPage() {
         </section>
       )}
     </main>
+  );
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  running: "Working",
+  active: "Active",
+  idle: "Idle",
+  paused: "Paused",
+  pending_approval: "Waiting for approval",
+  error: "Error",
+  terminated: "Terminated",
+};
+
+function AgentDetailPanel({
+  agent,
+  onClose,
+}: {
+  agent: { id: string; name: string; status?: string | null; urlKey?: string | null; role?: string | null; title?: string | null; taskTitle?: string | null };
+  onClose: () => void;
+}) {
+  const hostNavigation = useHostNavigation();
+  const status = agent.status ?? "idle";
+  // urlKey is the host's own agent route segment; without it there is no
+  // reliable path to link to, so the link is simply omitted rather than
+  // guessed at.
+  const agentHref = agent.urlKey ? `/agents/${agent.urlKey}` : null;
+
+  const row = (label: string, value: string) => (
+    <div style={{ display: "grid", gridTemplateColumns: "72px minmax(0, 1fr)", gap: 8, fontSize: 12 }}>
+      <span style={{ opacity: 0.6 }}>{label}</span>
+      <span style={{ minWidth: 0, wordBreak: "break-word" }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <aside
+      aria-label={`Details for ${agent.name}`}
+      style={{
+        position: "absolute",
+        right: 12,
+        top: 12,
+        zIndex: 3,
+        width: 260,
+        display: "grid",
+        gap: 10,
+        padding: "12px 14px",
+        borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.16)",
+        background: "rgba(17,24,39,0.94)",
+        color: "#e5e7eb",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {agent.name}
+          </div>
+          {agent.title ? <div style={{ fontSize: 12, opacity: 0.65 }}>{agent.title}</div> : null}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close details"
+          style={{ border: 0, background: "transparent", color: "inherit", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 2 }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gap: 5 }}>
+        {row("Status", STATUS_LABELS[status] ?? status)}
+        {agent.role ? row("Role", agent.role) : null}
+        {row("Task", agent.taskTitle ?? "—")}
+      </div>
+
+      {agentHref ? (
+        <a
+          {...hostNavigation.linkProps(agentHref)}
+          style={{
+            display: "block",
+            textAlign: "center",
+            padding: "7px 10px",
+            borderRadius: 4,
+            border: "1px solid rgba(148,163,184,0.35)",
+            background: "rgba(59,130,246,0.22)",
+            color: "inherit",
+            textDecoration: "none",
+            fontSize: 12,
+          }}
+        >
+          Open in Paperclip
+        </a>
+      ) : null}
+    </aside>
   );
 }
 

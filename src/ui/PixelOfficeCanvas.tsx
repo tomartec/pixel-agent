@@ -43,6 +43,10 @@ type PixelOfficeCanvasProps = {
   themeId: string;
   resetToken: number;
   roomLabels?: RoomLabel[];
+  /** Agent id (string form) currently selected, or null. */
+  selectedAgentId?: string | null;
+  /** Fires with the clicked agent's string id, or null when clicking empty floor. */
+  onSelectAgent?: (agentId: string | null) => void;
 };
 
 function stableNumericId(id: string): number {
@@ -63,7 +67,18 @@ function applyThemeToLayout(layout: OfficeLayout, themeId: string): OfficeLayout
   };
 }
 
-export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, themeId, resetToken, roomLabels }: PixelOfficeCanvasProps) {
+export function PixelOfficeCanvas({
+  agents,
+  camera,
+  builtMap,
+  companyId,
+  mapId,
+  themeId,
+  resetToken,
+  roomLabels,
+  selectedAgentId = null,
+  onSelectAgent,
+}: PixelOfficeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const officeRef = useRef<OfficeState | null>(null);
@@ -75,10 +90,19 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
   const [ready, setReady] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [hoveredCharacterId, setHoveredCharacterId] = useState<number | null>(null);
   const agentMeta = useMemo(
     () => new Map(agents.map((agent) => [stableNumericId(agent.id), agent] as const)),
     [agents],
   );
+  const selectedCharacterId = selectedAgentId === null ? null : stableNumericId(selectedAgentId);
+  // The render loop reads these every frame; keeping them in refs avoids
+  // tearing the loop down and rebuilding it on every hover change.
+  const selectionRef = useRef({ selected: selectedCharacterId, hovered: hoveredCharacterId });
+  selectionRef.current = { selected: selectedCharacterId, hovered: hoveredCharacterId };
+  const onSelectAgentRef = useRef(onSelectAgent);
+  onSelectAgentRef.current = onSelectAgent;
+  const viewTransformRef = useRef<{ offsetX: number; offsetY: number; zoom: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -339,8 +363,8 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
           panX,
           panY,
           {
-            selectedAgentId: null,
-            hoveredAgentId: null,
+            selectedAgentId: selectionRef.current.selected,
+            hoveredAgentId: selectionRef.current.hovered,
             hoveredTile: null,
             seats: office.seats,
             characters: office.characters,
@@ -350,6 +374,11 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
           layout.cols,
           layout.rows,
         );
+
+        // Remember the frame's world->screen transform so pointer handlers can
+        // invert it. renderFrame owns offsetX/offsetY, so this is the only
+        // place they are knowable.
+        viewTransformRef.current = { offsetX, offsetY, zoom };
 
         drawRoomLabels(ctx, offsetX, offsetY, zoom);
 
@@ -402,6 +431,57 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
       stop();
     };
   }, [agentMeta, camera, builtMap, roomLabels, layoutVersion]);
+
+  // Pointer selection. Kept in its own effect so hover state changes never tear
+  // down and restart the render loop above.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || layoutVersion === 0) return;
+    // The isometric map uses a different projection than renderFrame, so the
+    // inverse transform below does not apply there.
+    if (camera === "map") return;
+
+    function characterAt(event: MouseEvent): number | null {
+      const office = officeRef.current;
+      const view = viewTransformRef.current;
+      if (!office || !view) return null;
+      const rect = canvas!.getBoundingClientRect();
+      // Client px -> canvas backing px -> world px. The canvas is scaled by
+      // devicePixelRatio, hence the width ratio rather than a bare offset.
+      const scaleX = canvas!.width / rect.width;
+      const scaleY = canvas!.height / rect.height;
+      const canvasX = (event.clientX - rect.left) * scaleX;
+      const canvasY = (event.clientY - rect.top) * scaleY;
+      return office.getCharacterAt((canvasX - view.offsetX) / view.zoom, (canvasY - view.offsetY) / view.zoom);
+    }
+
+    function onMouseMove(event: MouseEvent) {
+      const id = characterAt(event);
+      setHoveredCharacterId(id);
+      canvas!.style.cursor = id === null ? "default" : "pointer";
+    }
+
+    function onMouseLeave() {
+      setHoveredCharacterId(null);
+      canvas!.style.cursor = "default";
+    }
+
+    function onClick(event: MouseEvent) {
+      const id = characterAt(event);
+      const agentId = id === null ? null : (agentMeta.get(id)?.id ?? null);
+      onSelectAgentRef.current?.(agentId);
+    }
+
+    canvas.addEventListener("mousemove", onMouseMove);
+    canvas.addEventListener("mouseleave", onMouseLeave);
+    canvas.addEventListener("click", onClick);
+    return () => {
+      canvas.removeEventListener("mousemove", onMouseMove);
+      canvas.removeEventListener("mouseleave", onMouseLeave);
+      canvas.removeEventListener("click", onClick);
+      canvas.style.cursor = "default";
+    };
+  }, [agentMeta, camera, layoutVersion]);
 
   return (
     <div ref={wrapRef} style={{ position: "relative", width: "100%", height: "min(725px, calc(100vh - 185px))", minHeight: "520px" }}>
