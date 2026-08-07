@@ -1,6 +1,6 @@
 {
   "name": "@tomartec/pixel-agent",
-  "version": "2026.807.1",
+  "version": "2026.807.2",
   "description": "Security camera style pixel office plugin for Paperclip",
   "type": "module",
   "exports": {

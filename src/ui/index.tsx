@@ -376,14 +376,14 @@ export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
       aria-current={isActive ? "page" : undefined}
       title={isCollapsed ? "Agent Pixels" : undefined}
       style={{
+        // The host keeps every nav item's icon at the exact same left offset
+        // in both the expanded and collapsed rail — margin/padding/gap never
+        // change. Only the label collapses (see styles.linkLabel below), so
+        // this object must NOT branch on isCollapsed: re-centering the icon
+        // here is what caused it to drift from every other sidebar icon once
+        // the rail narrowed.
         ...styles.link,
         ...(isActive ? styles.linkActive : {}),
-        // Every branch must name a concrete value: a spread key set to `undefined`
-        // overwrites what `styles.link` established, and React then clears the
-        // property outright — which silently dropped the host-matched metrics.
-        justifyContent: isCollapsed ? "center" : "flex-start",
-        margin: isCollapsed ? 0 : "0 8px",
-        padding: isCollapsed ? "6px 0" : "6px 8px",
         opacity: isActive ? 1 : 0.8,
       }}
     >
@@ -403,7 +403,19 @@ export function AgentPixelsSidebarLink({ context }: PluginSidebarProps) {
           <rect x="9" y="9" width="6" height="6" fill="currentColor" stroke="none" />
         </svg>
       </span>
-      <span style={{ ...styles.linkLabel, display: isCollapsed ? "none" : undefined }}>Agent Pixels</span>
+      <span
+        style={
+          isCollapsed
+            ? // Mirrors the host's own collapsed label: shrink to zero width
+              // and hide visually via color, but stay in the DOM (not
+              // display:none) so screen readers still announce the name —
+              // display:none silently dropped that.
+              { ...styles.linkLabel, flex: "0 0 0px", width: 0, color: "transparent" }
+            : styles.linkLabel
+        }
+      >
+        Agent Pixels
+      </span>
     </a>
   );
 }

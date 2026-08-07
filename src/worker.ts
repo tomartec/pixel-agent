@@ -77,6 +77,14 @@ const plugin = definePlugin({
 
     ctx.data.register("camera-room", async (params) => {
       const companyId = typeof params.companyId === "string" ? params.companyId : null;
+      // Previously the channel only opened lazily, the first time a subscribed
+      // agent event fired after this worker process started — so a company
+      // with no qualifying event since worker boot never got a channel at
+      // all, and usePluginStream on the UI side sat permanently unconnected
+      // (no error, just nothing to attach to) with no way to recover short of
+      // an actual event arriving. Open it eagerly as soon as the UI asks for
+      // camera-room data, which happens on every mount.
+      if (companyId) ensureChannel(companyId);
       const agents = companyId ? await ctx.agents.list({ companyId, limit: 100, offset: 0 }) : [];
 
       return {
