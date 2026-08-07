@@ -86,7 +86,7 @@ Download the latest `agent-pixels-*.zip` from the GitHub Releases page, then unz
 After unzipping, you should have a folder like this:
 
 ```text
-agent-pixels-2026.807.0/
+agent-pixels-2026.807.1/
   package.json
   README.md
   dist/
@@ -98,7 +98,7 @@ agent-pixels-2026.807.0/
 For Docker installs, unzip the release into a bind-mounted folder and install the path as seen from inside the container, for example:
 
 ```text
-/paperclip/plugins/agent-pixels-2026.807.0
+/paperclip/plugins/agent-pixels-2026.807.1
 ```
 
 ### Development Version
