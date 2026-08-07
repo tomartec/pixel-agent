@@ -286,10 +286,6 @@ Full history and downloadable ZIPs: [GitHub Releases](https://github.com/tomarte
 - **Fixed: sidebar icon drifted out of line when the sidebar was collapsed.** Paperclip keeps every nav icon at a fixed offset and only collapses the label; the plugin was re-centring its icon instead.
 - **Fixed: labels were unreadable in the Total camera.** Label sizes were floored in canvas units rather than CSS pixels, so on a high-DPI display they rendered at roughly half the intended size.
 
-### 2026.807.1
-
-- **Fixed: package metadata credited the upstream fork's author** rather than this repo's maintainer, in both the npm listing and Paperclip's plugin About panel.
-
 ### 2026.807.0
 
 - **The camera is live.** The plugin subscribes to agent status and run events and streams them to the office view, so it updates in real time instead of only on page load. A badge in the header reports the connection state (Live / Connecting / Reconnecting / Offline).
