@@ -8,6 +8,8 @@ export type AgentLiveEvent = {
   agentId: string;
   status: string | null;
   activityKind: ActivityKind;
+  /** Title of the in-progress issue assigned to this agent, or null. */
+  taskTitle: string | null;
   at: string;
 };
 
@@ -32,6 +34,32 @@ function inferActivityKind(agent: { name: string; title: string | null; role: st
   if (text.includes("engineer") || text.includes("devops") || text.includes("cto") || text.includes("software")) return "coding";
 
   return agent.status === "running" || agent.status === "active" ? "coding" : "idle";
+}
+
+/**
+ * Map agentId -> title of the issue that agent is currently working on.
+ *
+ * Deliberately one `issues.list` call for the whole company rather than one
+ * per agent: the camera lists up to 100 agents, and a per-agent lookup would
+ * fan that out into 100 round trips every time the page mounts.
+ */
+async function fetchCurrentTasks(
+  ctx: { issues: { list(input: Record<string, unknown>): Promise<Array<{ title: string; assigneeAgentId: string | null }>> } },
+  companyId: string,
+): Promise<Map<string, string>> {
+  const byAgent = new Map<string, string>();
+  try {
+    const issues = await ctx.issues.list({ companyId, status: "in_progress", limit: 200, offset: 0 });
+    for (const issue of issues) {
+      if (!issue.assigneeAgentId) continue;
+      // Keep the first one: an agent with several in-progress issues still only
+      // gets one line of canvas real estate.
+      if (!byAgent.has(issue.assigneeAgentId)) byAgent.set(issue.assigneeAgentId, issue.title);
+    }
+  } catch {
+    // Task titles are decorative; never let a failure here blank the office.
+  }
+  return byAgent;
 }
 
 const plugin = definePlugin({
@@ -65,11 +93,14 @@ const plugin = definePlugin({
         const agent = await ctx.agents.get(agentId, event.companyId);
         if (!agent) return;
 
+        const tasks = await fetchCurrentTasks(ctx, event.companyId);
+
         ctx.streams.emit(ensureChannel(event.companyId), {
           kind,
           agentId,
           status: agent.status,
           activityKind: inferActivityKind(agent),
+          taskTitle: tasks.get(agentId) ?? null,
           at: event.occurredAt,
         } satisfies AgentLiveEvent);
       });
@@ -86,6 +117,7 @@ const plugin = definePlugin({
       // camera-room data, which happens on every mount.
       if (companyId) ensureChannel(companyId);
       const agents = companyId ? await ctx.agents.list({ companyId, limit: 100, offset: 0 }) : [];
+      const tasks = companyId ? await fetchCurrentTasks(ctx, companyId) : new Map<string, string>();
 
       return {
         room: "Office",
@@ -98,6 +130,7 @@ const plugin = definePlugin({
           role: agent.role,
           title: agent.title,
           activityKind: inferActivityKind(agent),
+          taskTitle: tasks.get(agent.id) ?? null,
         })),
       };
     });

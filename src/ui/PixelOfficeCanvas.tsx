@@ -22,6 +22,8 @@ export type CameraAgent = {
   characterIndex?: number;
   pendingApproval?: boolean;
   waiting?: boolean;
+  /** Title of the issue this agent is currently working on, if any. */
+  taskTitle?: string | null;
 };
 
 export type RoomLabel = {
@@ -352,19 +354,43 @@ export function PixelOfficeCanvas({ agents, camera, builtMap, companyId, mapId, 
         drawRoomLabels(ctx, offsetX, offsetY, zoom);
 
         ctx.save();
-        ctx.font = `${Math.max(10, Math.floor(5 * zoom))}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillStyle = "#f9fafb";
         ctx.strokeStyle = "#000";
         ctx.lineWidth = Math.max(2, zoom);
+
+        // Canvas is scaled by devicePixelRatio, so a font size expressed in
+        // canvas units is dpr times smaller on screen. The old floor of 10
+        // rendered as 5 CSS px on a retina display — present but unreadable,
+        // which mattered most in the Total camera where zoom is smallest.
+        // Floor both labels in CSS pixels instead.
+        const dprNow = window.devicePixelRatio || 1;
+        const nameSize = Math.max(11 * dprNow, Math.floor(5 * zoom));
+        const taskSize = Math.round(nameSize * 0.85);
+        const lineGap = Math.round(nameSize * 0.15);
+
         for (const character of office.characters.values()) {
-          const name = agentMeta.get(character.id)?.name;
+          const meta = agentMeta.get(character.id);
+          const name = meta?.name;
           if (!name) continue;
           const x = offsetX + character.x * zoom;
           const y = offsetY + (character.y + 8) * zoom;
+
+          ctx.font = `${nameSize}px sans-serif`;
+          ctx.fillStyle = "#f9fafb";
           ctx.strokeText(name, x, y);
           ctx.fillText(name, x, y);
+
+          const task = meta?.taskTitle;
+          if (!task) continue;
+          // The Total camera fits every room at once, so labels there sit far
+          // closer together — truncate harder to limit collisions.
+          const limit = camera === "total" ? 18 : 28;
+          const text = task.length > limit ? `${task.slice(0, limit - 1)}…` : task;
+          ctx.font = `${taskSize}px sans-serif`;
+          ctx.fillStyle = "#93c5fd";
+          ctx.strokeText(text, x, y + nameSize + lineGap);
+          ctx.fillText(text, x, y + nameSize + lineGap);
         }
         ctx.restore();
       },

@@ -25,12 +25,14 @@ type CameraRoomData = {
     urlKey?: string | null;
     activityKind?: ActivityKind;
     characterIndex?: number;
+    taskTitle?: string | null;
   }>;
 };
 
 type LiveOverride = {
   status: string | null;
   activityKind: ActivityKind;
+  taskTitle: string | null;
   at: string;
 };
 
@@ -440,6 +442,7 @@ export function AgentPixelsCameraPage() {
         ...agent,
         status,
         activityKind: override?.activityKind ?? agent.activityKind,
+        taskTitle: override?.taskTitle ?? agent.taskTitle ?? null,
         characterIndex: assignments[agent.id],
         pendingApproval: status === "pending_approval",
         waiting: status === "idle" || status === "paused",
@@ -505,6 +508,7 @@ export function AgentPixelsCameraPage() {
       [lastEvent.agentId]: {
         status: lastEvent.status,
         activityKind: lastEvent.activityKind,
+        taskTitle: lastEvent.taskTitle ?? null,
         at: lastEvent.at,
       },
     }));
