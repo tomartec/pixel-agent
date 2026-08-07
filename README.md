@@ -12,9 +12,13 @@ This repo (`tomartec/pixel-agent`) is maintained independently, built on the off
 
 - Shows Paperclip agents walking around a single unified office floor — one rectangular map divided into rooms (office + lounge, boardroom + game room, overflow office, staff kitchen) connected by corridors.
 - Moves working agents toward desks and idle agents toward lounge, kitchen, boardroom, and games areas.
-- Camera views:
-  - **Camera 1–4** — per-room flat views, switchable with on-screen 4-way arrow buttons or the keyboard arrow keys (rooms are laid out on a 2×2 grid).
-  - **Total** — flat top-down view of the entire floor.
+- Updates live as agents work — status changes stream in over SSE rather than only on page load, with a connection badge in the header.
+- Labels each character with its name and the task it is currently working on; clicking a character opens a detail panel with a link through to that agent in Paperclip.
+- Shows a speech bubble above agents that are waiting on your approval, or idling.
+- Remembers where everyone is, so switching tabs or reloading does not send the whole office back to the entrance.
+- Camera views, chosen from the camera dropdown in the header:
+  - **Total** — flat top-down view of the entire floor (the default).
+  - **Per-room views** — one per quadrant, also switchable with the on-screen 4-way arrows or the keyboard arrow keys (rooms are laid out on a 2×2 grid).
   - **3D Map** — isometric view of the whole office: the floor plane is projected at 45°, walls and characters stand upright, furniture lies on the floor.
 - Includes assignable character sprites so each agent can have a consistent look.
 - **Office maps** — besides the classic HQ, seven preset floor plans (based on the reference art in `docs/option1-7.png`): Central Hub, Open Studio, The Boulevard, Campus Mini, Team Pods, Creative Loft, and Hybrid Office. Selectable from the camera page header; the choice is saved per company.
@@ -23,7 +27,7 @@ This repo (`tomartec/pixel-agent`) is maintained independently, built on the off
 
 ## Choosing a Map, Theme, and Industry Template
 
-The camera page header has three dropdowns (left of the camera buttons). All choices are saved per company in the browser, so each company can have its own office look.
+The camera page header starts with three dropdowns. All choices are saved per company in the browser, so each company can have its own office look.
 
 - **Map** — picks the floor plan:
   - **Classic HQ** (default) — the original four-room office.
@@ -37,7 +41,7 @@ The camera page header has three dropdowns (left of the camera buttons). All cho
 - **Theme** — re-tints the floors, walls, and desks of any map: Classic, Midnight, Pastel, Forest, Sunset, Monochrome, Neon, or Retro.
 - **Industry template** (preset maps only) — relabels the rooms so the same floor plan reads as a different company: Software Company, Creative Agency, E-commerce, or Game Studio. Only the room name plates change; the layout stays the same.
 
-Camera buttons follow the dropdowns: **3D Map** (isometric view), **Total** (whole-floor view, the default), and **Camera 1–4** (quadrant views, also switchable with the arrow keys or the on-screen arrows).
+To the right of these sit the **Camera** dropdown — **Total** (whole-floor view, the default) and one entry per room, named after the room itself — then the **3D Map** and **Characters** buttons, the connection badge, and the ↺ reset control. Quadrant cameras are also switchable with the arrow keys or the on-screen arrows.
 
 ## Screenshots
 
@@ -269,6 +273,31 @@ Common furniture sizes currently in use:
 | Arcade machine | `32x48` |
 | Paintings/whiteboard | `16x32` or `32x32` |
 | Plants | `16x32` or `32x48` |
+
+## Release Notes
+
+Full history and downloadable ZIPs: [GitHub Releases](https://github.com/tomartec/pixel-agent/releases).
+
+### 2026.807.2
+
+- **Agents show what they are working on.** Each character now has a second label beneath its name with the title of the in-progress task assigned to that agent, in every camera including Total.
+- **Click a character for details.** Selecting a character opens a panel with its status, role and current task, plus a link through to that agent in Paperclip. Hovering highlights the character under the cursor.
+- **Fixed: the live badge could be stuck on Offline forever.** The event channel was only created the first time a qualifying agent event fired after the worker started, so a company with no such event since startup had no channel to connect to at all — and reloading could not recover it.
+- **Fixed: sidebar icon drifted out of line when the sidebar was collapsed.** Paperclip keeps every nav icon at a fixed offset and only collapses the label; the plugin was re-centring its icon instead.
+- **Fixed: labels were unreadable in the Total camera.** Label sizes were floored in canvas units rather than CSS pixels, so on a high-DPI display they rendered at roughly half the intended size.
+
+### 2026.807.1
+
+- **Fixed: package metadata credited the upstream fork's author** rather than this repo's maintainer, in both the npm listing and Paperclip's plugin About panel.
+
+### 2026.807.0
+
+- **The camera is live.** The plugin subscribes to agent status and run events and streams them to the office view, so it updates in real time instead of only on page load. A badge in the header reports the connection state (Live / Connecting / Reconnecting / Offline).
+- **Agents keep their positions.** Character positions and seat assignments now survive tab switches and page reloads, instead of every agent walking back in from the entrance. A reset control (↺) clears saved positions.
+- **Speech bubbles.** Agents waiting on your approval show a permission bubble; idle agents show a waiting bubble.
+- **Camera controls consolidated.** The Total and Camera 1–4 buttons became a single dropdown labelled with real room names.
+- **Fixed: the office could freeze permanently** when an agent was already awaiting approval as the page loaded.
+- Requires Paperclip SDK `2026.722.0` or newer, and the `events.subscribe` capability.
 
 ## Support
 
