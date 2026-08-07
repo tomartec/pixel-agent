@@ -58,8 +58,14 @@ export function getCachedSprite(sprite: SpriteData, zoom: number): HTMLCanvasEle
   const rows = sprite.length;
   const cols = sprite[0].length;
   const canvas = document.createElement('canvas');
-  canvas.width = cols * zoom;
-  canvas.height = rows * zoom;
+  // A near-zero zoom (the main canvas can briefly report a clamped 1px width
+  // before its ResizeObserver settles) truncates cols/rows * zoom below 1,
+  // which the DOM coerces to a 0-sized canvas — drawImage() on that throws
+  // an uncaught InvalidStateError and permanently kills the render loop's
+  // requestAnimationFrame chain. Clamp to 1px, mirroring the same guard the
+  // main canvas resize already uses.
+  canvas.width = Math.max(1, Math.round(cols * zoom));
+  canvas.height = Math.max(1, Math.round(rows * zoom));
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
 
